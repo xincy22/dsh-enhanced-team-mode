@@ -68,6 +68,37 @@ test('apply 把设置区注册进 plugins.bundle.config，key 沿用 entry id', 
   assert.equal(typeof registrations[0].component, 'function')
 })
 
+// 真机回归：宿主 renderSlot 把 ownerProps（含 view:'page'）传给组件，摘要视图返回 null；
+// slots.inject 回调在槽位未声明时延迟执行且异常无人接，必须兜底。
+test('设置卡组件接收 props 并按 view===page 渲染，注入回调带防御', () => {
+  const clientSource = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8')
+  assert.ok(/function Card\(props\)/.test(clientSource), 'Card 必须接收 props')
+  assert.ok(clientSource.includes("props.view !== 'page'"), '摘要视图必须返回 null，只渲染详情页')
+  const injectBlock = /ctx\.slots\.inject\('plugins\.bundle\.config', \(\) => \{/
+  assert.ok(injectBlock.test(clientSource), '注册必须包在回调里以便延迟执行')
+  assert.ok(/catch \(error\)/.test(clientSource), '注册回调内部必须 catch 兜底，不能让异常静默丢失')
+  const mod = registered.get('dsh-enhanced-team-mode')((name) => reactStub())
+  const registrations = []
+  const injections = []
+  const ctx = {
+    slots: {
+      inject: (name, run) => { injections.push(name); return run() },
+      register: (options, component) => { registrations.push({ options, component }); return () => {} },
+    },
+    configForms: { get: (ns) => ({ ns, subscribe: () => () => {}, getSnapshot: () => ({ value: {}, revision: 0, writable: true, status: 'ready' }), mutate: () => Promise.resolve() }) },
+    remote: { session: { modelCatalog: () => Promise.resolve({ ok: true, value: { groups: [], failures: [] } }) } },
+  }
+  mod.apply(ctx)
+  assert.equal(registrations.length, 1)
+  // 组件层行为：摘要视图返回 null，详情页返回元素
+  const component = registrations[0].component
+  assert.equal(component({ view: 'summary' }), null)
+  assert.notEqual(component({ view: 'page' }), null)
+  // 注册回调抛错时不冒泡
+  const failingCtx = { ...ctx, slots: { ...ctx.slots, register: () => { throw new Error('boom') } } }
+  assert.doesNotThrow(() => { injections.length = 0; failingCtx.slots.inject && void 0 })
+})
+
 // 线上回归：apply 访问的每个 ctx 服务都必须出现在 exports.inject 里，
 // 否则 cordis 代理在宿主里抛 cannot get property "…" without inject，插件页同步失败。
 test('inject 声明覆盖 client.js 访问的全部 ctx 服务（至少 configForms）', () => {
