@@ -1,0 +1,33 @@
+{
+  "name": "dsh-enhanced-team-mode",
+  "version": "0.1.0",
+  "description": "Team mode coordination: inject the coordinator instruction once per independent root-session task.",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js"
+  },
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "test": "node --import ./test/fixtures/register-entry-loader.mjs --test"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "files": [
+    "index.js",
+    "src",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json",
+    "README.md",
+    "skills"
+  ]
+}

@@ -1,0 +1,5 @@
+# dsh-enhanced-team-mode bundle patch — one insert row.
+- insert:
+    - id: team-mode
+      name: 'dsh-enhanced-team-mode'
+      # 设置页命名空间取 entry id（team-mode），客户端 configForms 与 README 同步使用此值。
