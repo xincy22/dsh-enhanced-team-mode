@@ -40,13 +40,13 @@ test('bundle 按宿主协议注册模块 id', () => {
   assert.equal(registered.has('dsh-enhanced-team-mode'), true)
 })
 
-test('模块导出 apply 与 inject = [slots]', () => {
+test('模块导出 apply 与 inject（slots/remote/configForms）', () => {
   const mod = registered.get('dsh-enhanced-team-mode')((name) => {
     if (name === 'react') return reactStub()
     throw new Error('unexpected require: ' + name)
   })
   assert.equal(typeof mod.apply, 'function')
-  assert.deepEqual(mod.inject, ['slots'])
+  assert.deepEqual(mod.inject, ['slots', 'remote', 'configForms'])
 })
 
 test('apply 把设置区注册进 plugins.bundle.config，key 沿用 entry id', () => {
@@ -66,6 +66,24 @@ test('apply 把设置区注册进 plugins.bundle.config，key 沿用 entry id', 
   assert.equal(registrations.length, 1)
   assert.equal(registrations[0].options.key, 'dsh-enhanced-team-mode')
   assert.equal(typeof registrations[0].component, 'function')
+})
+
+// 线上回归：apply 访问的每个 ctx 服务都必须出现在 exports.inject 里，
+// 否则 cordis 代理在宿主里抛 cannot get property "…" without inject，插件页同步失败。
+test('inject 声明覆盖 client.js 访问的全部 ctx 服务（至少 configForms）', () => {
+  const clientSource = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8')
+  const declaredBlock = /exports\.inject\s*=\s*\[([^\]]*)\]/.exec(clientSource)
+  assert.ok(declaredBlock, 'client.js 必须导出 inject 数组')
+  const declared = [...declaredBlock[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1])
+  const accessed = new Set()
+  for (const match of clientSource.matchAll(/(?:^|[^\w.])ctx\.([a-zA-Z_][a-zA-Z0-9_]*)/g)) accessed.add(match[1])
+  assert.ok(accessed.size > 0, '应至少访问一个 ctx 服务')
+  for (const service of accessed) {
+    assert.ok(declared.includes(service), 'ctx.' + service + ' 已访问但未声明进 inject')
+  }
+  assert.ok(declared.includes('configForms'), 'configForms 必须在 inject 里（设置页读写入口）')
+  assert.ok(declared.includes('slots'), 'slots 必须在 inject 里（槽位注册入口）')
+  assert.ok(declared.includes('remote'), 'remote 必须在 inject 里（模型目录拉取）')
 })
 
 // 接线一致性：包名（客户端模块 id 与槽位 key）与 entry id（设置命名空间）是两个标识空间，
