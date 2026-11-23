@@ -46,7 +46,13 @@ export function toAgentOptions(decision) {
   if (decision?.kind !== 'route') {
     throw new SettingsError('SETTINGS_INVALID_SELECTION', '未知的派发决定 ' + String(decision?.kind))
   }
-  return { provider: decision.provider, model: decision.model }
+  const options = { provider: decision.provider, model: decision.model }
+  // dsh-tool-subagent 的 agentOptions 对 reasoningEffort 用 z.string().min(1)，
+  // 空串会校验失败，因此只在有值时带上。
+  if (typeof decision.reasoningEffort === 'string' && decision.reasoningEffort.length > 0) {
+    options.reasoningEffort = decision.reasoningEffort
+  }
+  return options
 }
 
 /**
@@ -67,7 +73,11 @@ export function resolveRole({ role, store, catalog, parentRoute }) {
     ? resolveAlias(selection.alias, catalog)
     : { provider: selection.provider, model: selection.model }
   assertRouteUsable(route, catalog, parentRoute)
-  return { kind: 'route', provider: route.provider, model: route.model }
+  const decision = { kind: 'route', provider: route.provider, model: route.model }
+  // 推理等级原样透传：它是模型级可选属性，空串表示跟随模型默认，此处不做任何替换。
+  const effort = typeof selection.reasoningEffort === 'string' ? selection.reasoningEffort.trim() : ''
+  if (effort.length > 0) decision.reasoningEffort = effort
+  return decision
 }
 
 /**

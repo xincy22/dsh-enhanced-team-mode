@@ -7,7 +7,8 @@
 
 export { SettingsError } from './errors.js'
 export {
-  DEFAULT_LABEL, EFFECT_SCOPE_NOTICE, ROLES, ROLE_HINTS, ROLE_LABELS,
+  DEFAULT_LABEL, EFFECT_SCOPE_NOTICE, REASONING_DEFAULT_LABEL, REASONING_HINT, REASONING_LABEL,
+  ROLES, ROLE_HINTS, ROLE_LABELS,
 } from './constants.js'
 export { createSettingsSchema, emptySettings, normalizeSettings } from './schema.js'
 export { createCatalog, createHostCatalog } from './catalog.js'

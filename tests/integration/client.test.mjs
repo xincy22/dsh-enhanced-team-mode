@@ -77,7 +77,14 @@ function createLiveReact() {
       }
       return [states.get(key), set]
     },
-    useEffect: () => {},
+    // 每个组件实例的每个 effect 只跑一次（模拟挂载）：这样取模型目录的 effect 会真的执行。
+    useEffect: (fn) => {
+      const key = 'effect:' + componentSeq + ':' + hookCursor++
+      if (states.has(key)) return
+      states.set(key, true)
+      const cleanup = fn()
+      if (typeof cleanup === 'function') states.set(key + ':cleanup', cleanup)
+    },
     useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
     Fragment: 'Fragment',
   }
@@ -345,18 +352,118 @@ test('mutate 返回 false：显示 SAVE_REJECTED，保留用户选择，不清�
   const afterSave = live.find(tree, (node) => node.type === 'button' && String(node.props.className).includes('is-primary'))
   assert.equal(afterSave.props.disabled, false, '被拒后保存按钮应仍可用（dirty 未清）')
 
-  // 3. 写入形态仍是 volatile 叶子路径（六个 op），不是整对象写
+  // 3. 写入形态仍是 volatile 叶子路径（九个 op，含 reasoningEffort），不是整对象写
   assert.equal(calls.length, 1, 'mutate 只应被调用一次')
-  assert.equal(calls[0].ops.length, 6, '三个角色各两个叶子写')
+  assert.equal(calls[0].ops.length, 9, '三个角色各三个叶子写')
   assert.deepEqual(calls[0].ops.map((op) => op.path.join('.')), [
-    'auditor.provider', 'auditor.model',
-    'executor.provider', 'executor.model',
-    'mechanical.provider', 'mechanical.model',
+    'auditor.provider', 'auditor.model', 'auditor.reasoningEffort',
+    'executor.provider', 'executor.model', 'executor.reasoningEffort',
+    'mechanical.provider', 'mechanical.model', 'mechanical.reasoningEffort',
   ])
+  for (const op of calls[0].ops) {
+    assert.equal(typeof op.value, 'string', '叶子写的值必须是字符串，不能是整对象')
+  }
+})
+
+// 推理等级（task-21 方案 A）：只有模型声明 reasoning.efforts 时才渲染等级选择器，
+// 与宿主 ModelSelect 的显隐规则一致（ModelSelect.tsx:498）。
+test('buildRows：模型声明的推理档位进入选项，行数据带当前等级', () => {
+  const mod = registered.get('dsh-enhanced-team-mode')((name) => reactStub())
+  const rows = mod.__test.buildRows({
+    values: { executor: { provider: 'p', model: 'm1', reasoningEffort: 'high' } },
+    groups: [{
+      id: 'p',
+      models: [
+        { id: 'm1', name: 'M1', reasoning: { efforts: [{ id: 'low', name: '低' }, { id: 'high', name: '高' }], defaultEffort: 'low' } },
+        { id: 'm2', name: 'M2' },
+      ],
+    }],
+    failures: [],
+  })
+  const executor = rows.find((row) => row.role === 'executor')
+  assert.equal(executor.reasoningEffort, 'high', '行数据必须带当前推理等级')
+  assert.deepEqual(executor.efforts.map((effort) => effort.id), ['low', 'high'])
+  // 声明了档位的模型才出现选项；没声明的模型 efforts 为空。
+  const m1 = executor.options.find((option) => option.key === 'p/m1')
+  const m2 = executor.options.find((option) => option.key === 'p/m2')
+  assert.deepEqual(m1.efforts.map((effort) => effort.id), ['low', 'high'])
+  assert.deepEqual(m2.efforts, [])
+
+  // 候选项：首项为空键（跟随模型默认），并用 defaultEffort 的名称提示默认档位。
+  assert.deepEqual(mod.__test.reasoningOptions(executor).map((option) => option.key), ['', 'low', 'high'])
+  assert.ok(mod.__test.reasoningOptions(executor)[0].label.includes('低'), '默认项应标出模型默认档位')
+
+  // 机械执行没选路由时不该有推理等级行。
+  const mechanical = rows.find((row) => row.role === 'mechanical')
+  assert.deepEqual(mechanical.efforts, [])
+  assert.deepEqual(mod.__test.reasoningOptions(mechanical), [], '模型无档位时不渲染等级选择器')
 })
 
 // 线上回归：apply 访问的每个 ctx 服务都必须出现在 exports.inject 里，
 // 否则 cordis 代理在宿主里抛 cannot get property "…" without inject，插件页同步失败。
+
+// 推理等级 UI（契约 A4）：模型声明了 reasoning.efforts 时该行出现第二个选择器，
+// 换到没有档位的模型后消失——与宿主 ModelSelect.tsx:498 的显隐规则一致。
+test('UI：模型有推理档位才渲染等级选择器，换模型后消失', async () => {
+  const live = createLiveReact()
+  const mod = registered.get('dsh-enhanced-team-mode')((name) => {
+    if (name === 'react') return live.React
+    throw new Error('unexpected require: ' + name)
+  })
+  const collected = []
+  const ctx = {
+    slots: { inject: (name, run) => run(), register: (options, component) => { collected.push({ options, component }); return () => {} } },
+    configForms: {
+      get: () => ({
+        subscribe: () => () => {},
+        getSnapshot: () => ({ value: {}, revision: 0, writable: true, status: 'ready' }),
+        mutate: () => Promise.resolve(true),
+      }),
+    },
+    remote: {
+      session: {
+        modelCatalog: () => Promise.resolve({
+          ok: true,
+          value: {
+            groups: [{
+              id: 'p',
+              models: [
+                { id: 'm1', name: 'M1', reasoning: { efforts: [{ id: 'low', name: '低' }, { id: 'high', name: '高' }], defaultEffort: 'low' } },
+                { id: 'm2', name: 'M2' },
+              ],
+            }],
+            failures: [],
+          },
+        }),
+      },
+    },
+  }
+  mod.apply(ctx)
+  const section = collected.find((entry) => entry.options.name === 'settings.section')
+
+  // 首屏：三档都跟随默认 → 没有任何推理等级选择器
+  let tree = live.paint(section.component({ close: () => {} }))
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  tree = live.paint(section.component({ close: () => {} }))
+  const reasoningSelects = (node) => live.findAll(node, (element) => element.type === 'select' && String(element.props.id || '').endsWith('-reasoning'))
+  assert.equal(reasoningSelects(tree).length, 0, '未选模型时不应出现等级选择器')
+
+  // 选一个声明了档位的模型 → 该行出现等级选择器
+  live.find(tree, (node) => node.type === 'select' && node.props.id === 'tm-auditor').props.onChange({ target: { value: 'p/m1' } })
+  tree = live.paint(section.component({ close: () => {} }))
+  const reasoning = live.find(tree, (node) => node.type === 'select' && node.props.id === 'tm-auditor-reasoning')
+  assert.ok(reasoning, '模型声明了推理档位时必须渲染等级选择器')
+  const dump = JSON.stringify(reasoning)
+  assert.ok(dump.includes('高'), '等级选项应包含模型声明的档位名')
+  assert.ok(dump.includes('跟随模型默认'), '首项应为跟随模型默认')
+  assert.equal(reasoningSelects(tree).length, 1, '只有所选中模型有档位的那一行渲染等级选择器')
+
+  // 换到没有档位的模型 → 等级选择器消失
+  live.find(tree, (node) => node.type === 'select' && node.props.id === 'tm-auditor').props.onChange({ target: { value: 'p/m2' } })
+  tree = live.paint(section.component({ close: () => {} }))
+  assert.equal(reasoningSelects(tree).length, 0, '无档位模型不应渲染等级选择器')
+})
+
 test('inject 声明覆盖 client.js 访问的全部 ctx 服务（至少 configForms）', () => {
   const clientSource = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8')
   const declaredBlock = /exports\.inject\s*=\s*\[([^\]]*)\]/.exec(clientSource)

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveRole } from '../../src/settings/resolve.js'
+import { resolveRole, toAgentOptions } from '../../src/settings/resolve.js'
 import { SettingsError } from '../../src/settings/errors.js'
 
 const catalog = (over = {}) => ({
@@ -90,6 +90,45 @@ test('无 allowlist 时只允许父路由；其他路由一律未授权', () => 
     assert.match(error.message, /没有授权列表|not authorized/)
     return true
   })
+})
+
+
+// 推理等级（task-21 方案 A）：模型级可选属性，解析时原样透传，派发时映射进 agentOptions。
+test('推理等级：显式路由透传到决定对象与 agentOptions', () => {
+  const decision = resolveRole({
+    role: 'executor',
+    store: store({ executor: { mode: 'explicit', provider: 'opencode-go', model: 'deepseek-v4.1-pro', reasoningEffort: 'high' } }),
+    catalog: catalog(),
+    parentRoute,
+  })
+  assert.deepEqual(decision, { kind: 'route', provider: 'opencode-go', model: 'deepseek-v4.1-pro', reasoningEffort: 'high' })
+  assert.deepEqual(toAgentOptions(decision), { provider: 'opencode-go', model: 'deepseek-v4.1-pro', reasoningEffort: 'high' })
+})
+
+test('推理等级：空串表示跟随模型默认，不进 agentOptions', () => {
+  const decision = resolveRole({
+    role: 'executor',
+    store: store({ executor: { mode: 'explicit', provider: 'opencode-go', model: 'deepseek-v4.1-pro', reasoningEffort: '' } }),
+    catalog: catalog(),
+    parentRoute,
+  })
+  assert.equal(decision.reasoningEffort, undefined, '空串不应出现在决定对象里')
+  // 宿主 agentOptions 对 reasoningEffort 用 z.string().min(1)，空串会校验失败，必须省略该键。
+  assert.deepEqual(toAgentOptions(decision), { provider: 'opencode-go', model: 'deepseek-v4.1-pro' })
+})
+
+test('推理等级：别名解析同样透传', () => {
+  const decision = resolveRole({
+    role: 'auditor',
+    store: store({ auditor: { mode: 'alias', alias: 'DeepSeek V4.1 Pro', reasoningEffort: 'low' } }),
+    catalog: catalog(),
+    parentRoute,
+  })
+  assert.equal(decision.reasoningEffort, 'low')
+})
+
+test('跟随默认的派发不产生 agentOptions（推理等级一并省略）', () => {
+  assert.equal(toAgentOptions({ kind: 'default' }), undefined)
 })
 
 test('别名唯一命中时解析成精确路由', () => {

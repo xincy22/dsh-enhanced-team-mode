@@ -1,7 +1,7 @@
 /**
  * schema.js — 插件设置的表单 schema、归一化与空值语义。
  *
- * 存储形态是每个角色两个字符串（provider 与 model），空串表示该角色跟随默认：
+ * 存储形态是每个角色三个字符串（provider、model、reasoningEffort），空串表示该角色跟随默认或跟随模型默认：
  *  - 两个字段都空       → default
  *  - 只有 provider      → 不完整，直接报错，不猜模型
  *  - 只有 model         → 显式别名候选，交给解析阶段用授权目录唯一命中
@@ -32,7 +32,7 @@ export function createSettingsSchema(z) {
     const leaf = z.string().default('')
     return typeof leaf.volatile === 'function' ? leaf.volatile() : leaf
   }
-  const role = () => z.object({ provider: field(), model: field() })
+  const role = () => z.object({ provider: field(), model: field(), reasoningEffort: field() })
   return z.object({
     auditor: role(),
     executor: role(),
@@ -90,20 +90,23 @@ export function normalizeSettings(raw) {
     }
     const provider = readScalar(value.provider) ?? ''
     const model = readScalar(value.model) ?? ''
-    if (typeof provider !== 'string' || typeof model !== 'string') {
-      throw new SettingsError('SETTINGS_INVALID_ROLE', '设置项 ' + role + ' 的 provider 与 model 必须是字符串')
+    const effortRaw = readScalar(value.reasoningEffort) ?? ''
+    if (typeof provider !== 'string' || typeof model !== 'string' || typeof effortRaw !== 'string') {
+      throw new SettingsError('SETTINGS_INVALID_ROLE', '设置项 ' + role + ' 的 provider、model 与 reasoningEffort 必须是字符串')
     }
     const p = provider.trim()
     const m = model.trim()
+    // 推理等级是模型级可选属性：没有路由时它没有意义，忽略。
+    const effort = effortRaw.trim()
     if (p.length === 0 && m.length === 0) continue
     if (p.length === 0) {
-      out[role] = { mode: 'alias', alias: m }
+      out[role] = { mode: 'alias', alias: m, reasoningEffort: effort }
       continue
     }
     if (m.length === 0) {
       throw new SettingsError('SETTINGS_INCOMPLETE_ROUTE', '设置项 ' + role + ' 只给了 provider，缺少 model')
     }
-    out[role] = { mode: 'explicit', provider: p, model: m }
+    out[role] = { mode: 'explicit', provider: p, model: m, reasoningEffort: effort }
   }
   return out
 }

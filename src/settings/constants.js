@@ -24,6 +24,15 @@ export const ROLE_HINTS = {
 /** 跟随默认这一选项的标签。 */
 export const DEFAULT_LABEL = '跟随 DSH 默认（新成员继承父路由）'
 
+/** 推理等级选择器的标签。宿主只在模型声明 reasoning.efforts 时才显示该行。 */
+export const REASONING_LABEL = '推理等级'
+
+/** 未指定推理等级时的标签：跟随模型默认。 */
+export const REASONING_DEFAULT_LABEL = '跟随模型默认'
+
+/** 推理等级的作用说明（不改变模型选择，只影响该成员的思考强度）。 */
+export const REASONING_HINT = '仅在你选中的模型声明了推理档位时出现；空值表示跟随该模型的默认档位。'
+
 /** 生效范围声明：PLAN 要求页面明确告知，且不得暗示影响主对话或全局默认。 */
 export const EFFECT_SCOPE_NOTICE = '只影响本插件在团队模式下新创建的成员；在跑与空闲的已有成员保留当前模型。'
   + '不改变主对话模型、普通子代理或 DSH 的全局默认模型。'

@@ -28,26 +28,34 @@ export function readSettings(config) {
 export function mutateOps(role, selection) {
   if (!ROLES.includes(role)) throw new SettingsError('SETTINGS_UNKNOWN_ROLE', '未知角色 ' + String(role))
   const kind = selection?.kind
-  if (kind === 'default') return [set(role, 'provider', ''), set(role, 'model', '')]
+  // 推理等级是模型级可选字段：路由为 default 时一并清空，避免留下对不上路由的残留值。
+  if (kind === 'default') {
+    return [set(role, 'provider', ''), set(role, 'model', ''), set(role, 'reasoningEffort', '')]
+  }
+  const effort = typeof selection.reasoningEffort === 'string' ? selection.reasoningEffort.trim() : ''
   if (kind === 'route') {
     if (typeof selection.provider !== 'string' || typeof selection.model !== 'string'
       || selection.provider.length === 0 || selection.model.length === 0) {
       throw new SettingsError('SETTINGS_INVALID_SELECTION', '显式路由必须同时给出 provider 与 model')
     }
-    return [set(role, 'provider', selection.provider), set(role, 'model', selection.model)]
+    return [
+      set(role, 'provider', selection.provider),
+      set(role, 'model', selection.model),
+      set(role, 'reasoningEffort', effort),
+    ]
   }
   if (kind === 'alias') {
     if (typeof selection.alias !== 'string' || selection.alias.length === 0) {
       throw new SettingsError('SETTINGS_INVALID_SELECTION', '别名不能为空')
     }
-    return [set(role, 'provider', ''), set(role, 'model', selection.alias)]
+    return [set(role, 'provider', ''), set(role, 'model', selection.alias), set(role, 'reasoningEffort', effort)]
   }
   throw new SettingsError('SETTINGS_INVALID_SELECTION', '未知的选择类型 ' + String(kind))
 }
 
 /**
  * @param {string} role - 角色。
- * @param {string} field - provider 或 model。
+ * @param {string} field - provider、model 或 reasoningEffort。
  * @param {string} value - 写入值。
  * @returns {{op: 'set', path: string[], value: string}} 路径操作。
  */

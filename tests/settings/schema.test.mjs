@@ -11,20 +11,20 @@ const z = {
   object: (shape) => ({ shape }),
 }
 
-test('schema 暴露三个角色、每个角色两个叶子字段', () => {
+test('schema 暴露三个角色、每个角色三个叶子字段（含 reasoningEffort）', () => {
   const schema = createSettingsSchema(z)
   assert.deepEqual(Object.keys(schema.shape), ['auditor', 'executor', 'mechanical'])
-  assert.deepEqual(Object.keys(schema.shape.auditor.shape), ['provider', 'model'])
-  assert.deepEqual(Object.keys(schema.shape.executor.shape), ['provider', 'model'])
-  assert.deepEqual(Object.keys(schema.shape.mechanical.shape), ['provider', 'model'])
+  for (const role of ['auditor', 'executor', 'mechanical']) {
+    assert.deepEqual(Object.keys(schema.shape[role].shape), ['provider', 'model', 'reasoningEffort'])
+  }
 })
 
 // 真机回归：宿主只把带 volatile 标记的字段放进可写设置文档；缺标记时该 entry 不会出现在
 // settings/describe 的命名空间里，configForms.get(entryId) 拿到空壳、mutate 必被拒（实测返回 false）。
-test('六个叶子字段全部声明 volatile，宿主才会提供可写设置命名空间', () => {
+test('九个叶子字段全部声明 volatile，宿主才会提供可写设置命名空间', () => {
   volatileCalls.length = 0
   createSettingsSchema(z)
-  assert.equal(volatileCalls.length, 6, '三个角色 × 两个字段都要 volatile')
+  assert.equal(volatileCalls.length, 9, '三个角色 × 三个字段都要 volatile')
 })
 
 test('空配置归一为三角色都跟随默认', () => {
@@ -38,7 +38,7 @@ test('空配置归一为三角色都跟随默认', () => {
 
 test('完整路由归一为显式选择', () => {
   const out = normalizeSettings({ executor: { provider: 'opencode-go', model: 'deepseek-v4.1-flash' } })
-  assert.deepEqual(out.executor, { mode: 'explicit', provider: 'opencode-go', model: 'deepseek-v4.1-flash' })
+  assert.deepEqual(out.executor, { mode: 'explicit', provider: 'opencode-go', model: 'deepseek-v4.1-flash', reasoningEffort: '' })
   assert.equal(out.auditor.mode, 'default')
 })
 
@@ -53,7 +53,7 @@ test('只给 provider 报不完整，而不是猜一个模型', () => {
 
 test('仅 model 且形如别名的输入被当作别名候选，交由解析阶段校验', () => {
   const out = normalizeSettings({ auditor: { provider: '', model: 'deepseek-v4.1-flash' } })
-  assert.deepEqual(out.auditor, { mode: 'alias', alias: 'deepseek-v4.1-flash' })
+  assert.deepEqual(out.auditor, { mode: 'alias', alias: 'deepseek-v4.1-flash', reasoningEffort: '' })
 })
 
 test('三个角色互不影响', () => {
@@ -62,9 +62,9 @@ test('三个角色互不影响', () => {
     auditor: { provider: 'p2', model: 'm2' },
     mechanical: { provider: 'p3', model: 'm3' },
   })
-  assert.deepEqual(out.executor, { mode: 'explicit', provider: 'p1', model: 'm1' })
-  assert.deepEqual(out.auditor, { mode: 'explicit', provider: 'p2', model: 'm2' })
-  assert.deepEqual(out.mechanical, { mode: 'explicit', provider: 'p3', model: 'm3' })
+  assert.deepEqual(out.executor, { mode: 'explicit', provider: 'p1', model: 'm1', reasoningEffort: '' })
+  assert.deepEqual(out.auditor, { mode: 'explicit', provider: 'p2', model: 'm2', reasoningEffort: '' })
+  assert.deepEqual(out.mechanical, { mode: 'explicit', provider: 'p3', model: 'm3', reasoningEffort: '' })
 })
 
 test('旧配置缺 mechanical 字段时按 default 兼容，不要求迁移', () => {
@@ -72,9 +72,22 @@ test('旧配置缺 mechanical 字段时按 default 兼容，不要求迁移', ()
     executor: { provider: 'p1', model: 'm1' },
     auditor: { provider: '', model: 'alias-a' },
   })
-  assert.deepEqual(out.executor, { mode: 'explicit', provider: 'p1', model: 'm1' })
-  assert.deepEqual(out.auditor, { mode: 'alias', alias: 'alias-a' })
+  assert.deepEqual(out.executor, { mode: 'explicit', provider: 'p1', model: 'm1', reasoningEffort: '' })
+  assert.deepEqual(out.auditor, { mode: 'alias', alias: 'alias-a', reasoningEffort: '' })
   assert.deepEqual(out.mechanical, { mode: 'default' })
+})
+
+// 新增：推理等级是模型级可选属性，零迁移（旧配置缺该字段）且可透传。
+test('推理等级：旧配置缺字段归一为空串，显式档位原样透传', () => {
+  const legacy = normalizeSettings({ executor: { provider: 'p', model: 'm' } })
+  assert.equal(legacy.executor.reasoningEffort, '')
+  const withEffort = normalizeSettings({ executor: { provider: 'p', model: 'm', reasoningEffort: ' high ' } })
+  assert.deepEqual(withEffort.executor, { mode: 'explicit', provider: 'p', model: 'm', reasoningEffort: 'high' })
+  // 没有路由时推理等级没有意义：随 default 一并忽略。
+  const orphan = normalizeSettings({ auditor: { provider: '', model: '', reasoningEffort: 'high' } })
+  assert.deepEqual(orphan.auditor, { mode: 'default' })
+  // 类型不对仍然报错，不静默吞掉。
+  assert.throws(() => normalizeSettings({ auditor: { provider: 'p', model: 'm', reasoningEffort: 1 } }), /SETTINGS_INVALID_ROLE/)
 })
 
 test('非法输入形状被拒绝', () => {

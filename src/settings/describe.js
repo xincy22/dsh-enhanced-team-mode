@@ -6,7 +6,7 @@
  * 模块不会为了"看起来正常"而静默换成别的路由。
  */
 
-import { DEFAULT_LABEL, EFFECT_SCOPE_NOTICE, ROLES, ROLE_HINTS, ROLE_LABELS } from './constants.js'
+import { DEFAULT_LABEL, EFFECT_SCOPE_NOTICE, REASONING_HINT, REASONING_LABEL, ROLES, ROLE_HINTS, ROLE_LABELS } from './constants.js'
 import { SettingsError } from './errors.js'
 import { resolveRole } from './resolve.js'
 
@@ -77,8 +77,11 @@ export function describeRole({ role, store, catalog, parentRoute }) {
     hint: ROLE_HINTS[role],
     mode: selection.mode,
     selection,
+    reasoningEffort: typeof selection.reasoningEffort === 'string' ? selection.reasoningEffort : '',
     currentLabel,
     defaultLabel: DEFAULT_LABEL,
+    reasoningLabel: REASONING_LABEL,
+    reasoningHint: REASONING_HINT,
     options,
     notice: EFFECT_SCOPE_NOTICE,
     error,
