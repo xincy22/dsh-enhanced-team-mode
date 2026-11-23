@@ -75,5 +75,7 @@ test('入口使用真实 schemastery（无 .nullable()）而非替身', async ()
   assert.equal(typeof schema, 'function')
   assert.equal(typeof schema().nullable, 'undefined')
   const config = schema({ executor: { provider: 'p', model: 'm' } })
-  assert.equal(config.executor.provider, 'p')
+  // volatile 字段解析后是响应式 foam，取值要用 .get()（normalizeSettings 内部已统一解包）。
+  const provider = typeof config.executor.provider?.get === 'function' ? config.executor.provider.get() : config.executor.provider
+  assert.equal(provider, 'p')
 })

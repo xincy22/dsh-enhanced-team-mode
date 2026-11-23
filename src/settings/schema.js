@@ -19,7 +19,20 @@ import { ROLES } from './constants.js'
  * @returns {object} 可挂到插件 Config 的 schema。
  */
 export function createSettingsSchema(z) {
-  const role = () => z.object({ provider: z.string().default(''), model: z.string().default('') })
+  /**
+   * 一个字符串叶子字段。
+   *
+   * `.volatile()` 是宿主 settings 文档的写入标记：只有带该标记的字段才会让这个 entry
+   * 获得 settings 命名空间（`configForms.get(entryId)` 才有内容）。缺了它，宿主
+   * `settings/describe` 不会列出该命名空间，客户端拿到的表单是空壳，
+   * `mutate` 一定被拒（真机实测：返回 false，不写盘）。
+   * 替身 z 可能没有该链式方法，因此按存在性调用。
+   */
+  const field = () => {
+    const leaf = z.string().default('')
+    return typeof leaf.volatile === 'function' ? leaf.volatile() : leaf
+  }
+  const role = () => z.object({ provider: field(), model: field() })
   return z.object({
     auditor: role(),
     executor: role(),
@@ -40,10 +53,28 @@ export function emptySettings() {
 }
 
 /**
+ * 读取一个可能被 volatile 包装的标量。
+ *
+ * schemastery 的 volatile 字段在解析后会被包成响应式 foam（带 get/set），
+ * 不是普通字符串。归一化时必须先取值，否则会把 foam 当成非法类型。
+ * @param {unknown} value - 原始字段值。
+ * @returns {unknown} 解包后的值。
+ */
+export function readScalar(value) {
+  if (value !== null && typeof value === 'object' && typeof value.get === 'function') {
+    try {
+      return value.get()
+    } catch {
+      return value
+    }
+  }
+  return value
+}
+
+/**
  * 把插件配置归一化成解析阶段使用的形态。
  * @param {unknown} raw - 插件 Config 对象（可为空）。
  * @returns {{auditor: object, executor: object, mechanical: object}} 归一化结果。
- * @throws {SettingsError} 形状非法（SETTINGS_INVALID_ROLE）或只给了 provider（SETTINGS_INCOMPLETE_ROUTE）。
  */
 export function normalizeSettings(raw) {
   const out = emptySettings()
@@ -57,8 +88,8 @@ export function normalizeSettings(raw) {
     if (typeof value !== 'object' || Array.isArray(value)) {
       throw new SettingsError('SETTINGS_INVALID_ROLE', '设置项 ' + role + ' 必须是对象')
     }
-    const provider = value.provider ?? ''
-    const model = value.model ?? ''
+    const provider = readScalar(value.provider) ?? ''
+    const model = readScalar(value.model) ?? ''
     if (typeof provider !== 'string' || typeof model !== 'string') {
       throw new SettingsError('SETTINGS_INVALID_ROLE', '设置项 ' + role + ' 的 provider 与 model 必须是字符串')
     }

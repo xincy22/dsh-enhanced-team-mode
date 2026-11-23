@@ -3,8 +3,9 @@ import assert from 'node:assert/strict'
 import { createSettingsSchema, normalizeSettings, emptySettings } from '../../src/settings/schema.js'
 import { SettingsError } from '../../src/settings/errors.js'
 
-/** 极简 schemastery 替身：只记录结构，不实现校验语义。 */
-const leaf = { default: () => leaf }
+/** 极简 schemastery 替身：只记录结构与 volatile 调用，不实现校验语义。 */
+const volatileCalls = []
+const leaf = { default: () => leaf, volatile: () => { volatileCalls.push(1); return leaf } }
 const z = {
   string: () => leaf,
   object: (shape) => ({ shape }),
@@ -16,6 +17,14 @@ test('schema 暴露三个角色、每个角色两个叶子字段', () => {
   assert.deepEqual(Object.keys(schema.shape.auditor.shape), ['provider', 'model'])
   assert.deepEqual(Object.keys(schema.shape.executor.shape), ['provider', 'model'])
   assert.deepEqual(Object.keys(schema.shape.mechanical.shape), ['provider', 'model'])
+})
+
+// 真机回归：宿主只把带 volatile 标记的字段放进可写设置文档；缺标记时该 entry 不会出现在
+// settings/describe 的命名空间里，configForms.get(entryId) 拿到空壳、mutate 必被拒（实测返回 false）。
+test('六个叶子字段全部声明 volatile，宿主才会提供可写设置命名空间', () => {
+  volatileCalls.length = 0
+  createSettingsSchema(z)
+  assert.equal(volatileCalls.length, 6, '三个角色 × 两个字段都要 volatile')
 })
 
 test('空配置归一为三角色都跟随默认', () => {
