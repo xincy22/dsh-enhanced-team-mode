@@ -69,6 +69,11 @@ export function registerSkill(ctx, options = {}) {
     description: skill.description,
     content: skill.content,
     provider: 'dsh-enhanced-team-mode',
+    // source 是宿主 SkillDefinition 的必填字段：register() 只为 invocation 与 provider 补默认值，
+    // 不补 source；缺了它技能目录照常显示（list 不校验），但 get() 走 validateDefinition 时会报
+    // 'loaded skill "…" source must be a string'。经 ctx.skills.register 注册即 runtime 来源，
+    // 与宿主 RUNTIME_PROVIDER 常量同值（@deepseek-ai/dsh-skill/src/index.ts:24, :40）。
+    source: 'runtime',
   }
   if (skill.whenToUse !== undefined) registration.whenToUse = skill.whenToUse
   return ctx.skills.register(registration)

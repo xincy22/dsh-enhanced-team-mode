@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { loadSkill, parseSkillFile, registerSkill, SKILL_NAME } from '../../src/skill/register.js'
 import { AUDIT_CHECKS, AUDIT_CHECKS_INTRO, CORE_DUTIES, COORDINATOR_INSTRUCTION, SCOPE_LINE, SKILL_POINTER } from '../../src/inject/instruction.js'
 
+
 const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
 const readmeSrc = readFileSync(new URL('../../README.md', import.meta.url), 'utf8')
 const planSrc = readFileSync(new URL('../../PLAN.md', import.meta.url), 'utf8')
@@ -170,6 +171,84 @@ test('注册调用把技能交给宿主的 skills 服务', () => {
   assert.equal(captured[0].provider, 'dsh-enhanced-team-mode')
   assert.ok(captured[0].content.includes('## 团队结构'))
   assert.equal(typeof dispose, 'function')
+})
+
+// —— 技能注册 source 回归（三层）————————————————————————————————————
+// 背景：宿主 register() 只补 invocation 与 provider 的默认值，不补 source；
+// 而 skills.get() 会走 validateDefinition，对 source 做 typeof === 'string' 校验。
+// 插件漏传 source 时，技能目录照常显示（list 路径不校验），一加载就报
+// 'loaded skill "team-mode-collaboration" source must be a string'。
+// 三层分别守：字段存在且类型正确、取值在宿主 SkillSource 字面量集合内、真能过宿主校验。
+
+// 宿主加载校验的逐字摘录，来源：app.asar 内
+// dsh/node_modules/@deepseek-ai/dsh-skill/lib/index.js
+//   SKILL_NAME 行 17 附近 / validateDefinition 行 471 附近 / validateInvocation 行 504 附近
+// 只摘这三个符号：它们不依赖宿主服务（只用正则、typeof 与 TypeError），
+// 这样第三层测的是宿主真校验，而不是凭记忆复刻。宿主升级改了校验，重新摘录即可。
+const HOST_SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+function hostValidateInvocation(invocation, subject) {
+  if (invocation === undefined) return
+  if (typeof invocation !== 'object' || invocation === null || Array.isArray(invocation)) throw new TypeError(subject + ' with a non-object invocation policy')
+  const policy = invocation
+  if (typeof policy.modelInvocable !== 'boolean') throw new TypeError(subject + ' with a non-boolean invocation.modelInvocable')
+  if (typeof policy.userInvocable !== 'boolean') throw new TypeError(subject + ' with a non-boolean invocation.userInvocable')
+}
+
+function validateDefinition(skill) {
+  const name = skill.name
+  const description = skill.description
+  const whenToUse = skill.whenToUse
+  const invocation = skill.invocation
+  const source = skill.source
+  const provider = skill.provider
+  const content = skill.content
+  const path = skill.path
+  if (typeof name !== 'string') throw new TypeError('loaded skill name must be a string')
+  if (!HOST_SKILL_NAME.test(name)) throw new Error('loaded skill has invalid name "' + name + '"')
+  if (typeof description !== 'string') throw new TypeError('loaded skill "' + name + '" description must be a string')
+  if (description.length === 0) throw new Error('loaded skill "' + name + '" requires a description')
+  hostValidateInvocation(invocation, 'loaded skill "' + name + '"')
+  if (whenToUse !== undefined && typeof whenToUse !== 'string') throw new TypeError('loaded skill "' + name + '" whenToUse must be a string')
+  if (typeof source !== 'string') throw new TypeError('loaded skill "' + name + '" source must be a string')
+  if (typeof provider !== 'string') throw new TypeError('loaded skill "' + name + '" provider must be a string')
+  if (typeof content !== 'string') throw new TypeError('loaded skill "' + name + '" content must be a string')
+  if (path !== undefined && typeof path !== 'string') throw new TypeError('loaded skill "' + name + '" path must be a string')
+}
+
+/** 宿主 SkillSource 的合法字面量（@deepseek-ai/dsh-skill/src/index.ts:40）。 */
+const LEGAL_SOURCES = ['project-dsh', 'project-agents', 'runtime', 'user-dsh', 'user-agents', 'custom', 'bundled']
+
+/** 捕获一次 registerSkill 交给宿主的注册对象。 */
+function captureRegistration() {
+  const captured = []
+  const ctx = { skills: { register: (skill) => { captured.push(skill); return () => {} } } }
+  registerSkill(ctx)
+  return captured[0]
+}
+
+test('① 注册对象带 source，且是字符串', () => {
+  const registration = captureRegistration()
+  assert.equal(typeof registration.source, 'string', '注册对象必须带 source 字符串')
+  assert.equal(registration.source, 'runtime', '经由 ctx.skills.register 注册，语义上就是 runtime 来源')
+})
+
+test('② source 取值在宿主 SkillSource 字面量集合内', () => {
+  const registration = captureRegistration()
+  assert.ok(LEGAL_SOURCES.includes(registration.source), 'source 不在宿主合法取值内：' + String(registration.source))
+})
+
+test('③ 注册对象能过宿主 validateDefinition（加载路径真校验）', () => {
+  const registration = captureRegistration()
+  // 宿主 register() 会补 invocation 与 provider 的默认值，这里同源补齐后再校验。
+  const definition = {
+    invocation: { modelInvocable: true, userInvocable: false },
+    ...registration,
+  }
+  assert.doesNotThrow(() => validateDefinition(definition), '注册对象过不了宿主加载校验')
+  // 反向守卫：缺 source 时必须报错，证明这条测试真的在测该校验而不是空跑。
+  const { source, ...withoutSource } = definition
+  assert.throws(() => validateDefinition(withoutSource), /source must be a string/)
 })
 
 test('没有 skills 服务时注册直接抛错，由入口兜住', () => {
