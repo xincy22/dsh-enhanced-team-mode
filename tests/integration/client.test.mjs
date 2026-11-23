@@ -8,6 +8,7 @@ function reactStub() {
     createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
     useState: (initial) => [initial, () => {}],
     useEffect: () => {},
+    useRef: (initial) => ({ current: initial === undefined ? null : initial }),
     useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
   }
   return React
@@ -85,6 +86,9 @@ function createLiveReact() {
       const cleanup = fn()
       if (typeof cleanup === 'function') states.set(key + ':cleanup', cleanup)
     },
+    useRef: (initial) => (states.has('ref:' + componentSeq + ':' + hookCursor)
+      ? states.get('ref:' + componentSeq + ':' + hookCursor++)
+      : (() => { const ref = { current: initial === undefined ? null : initial }; states.set('ref:' + componentSeq + ':' + hookCursor, ref); hookCursor++; return ref })()),
     useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
     Fragment: 'Fragment',
   }
@@ -251,7 +255,7 @@ test('settings.section 独立设置页：id=entry id、order=80、label=团队�
   assert.notEqual(element, null)
   const dump = JSON.stringify(element)
   assert.ok(dump.includes('团队模式'), '设置页必须有标题')
-  assert.ok(dump.includes('三档'), '设置页必须说明三档作用')
+  assert.ok(dump.includes('每档'), '设置页必须说明每档的作用')
 
   // 无服务：settings.section 仍注册，组件渲染可见错误文本而不是静默返回
   env = makeCtx(false)
@@ -288,14 +292,14 @@ test('回归：设置页组件树可完整展开、无组件自递归，且渲�
   for (const title of ['审计模型', '能力型执行模型', '机械执行模型']) {
     assert.ok(dump.includes(title), '缺少表单行：' + title)
   }
-  const selects = (tree) => (JSON.stringify(tree).match(/"className":"tm-select"/g) || []).length
-  assert.equal(selects(tree), 3, '必须渲染三个下拉框')
+  const selects = (tree) => (JSON.stringify(tree).match(/"className":"tm-select[^"]*"/g) || []).length
+  assert.equal(selects(tree), 3, '三档各一个复合选择器')
   assert.ok(dump.includes('跟随 DSH 默认'), '每行都要有「跟随 DSH 默认」选项')
 
   // 详情页卡同样能展开，且摘要视图仍返回 null
   const card = env.collected.find((entry) => entry.options.name === 'plugins.bundle.config')
   assert.equal(card.component({ view: 'summary' }), null)
-  assert.equal(selects(expandTree(card.component({ view: 'page' }))), 3, '详情页卡同样渲染三个下拉框')
+  assert.equal(selects(expandTree(card.component({ view: 'page' }))), 3, '详情页卡同样渲染三个复合选择器')
 })
 
 
@@ -324,14 +328,18 @@ test('mutate 返回 false：显示 SAVE_REJECTED，保留用户选择，不清�
   mod.apply(ctx)
   const section = collected.find((entry) => entry.options.name === 'settings.section')
 
-  // 1. 选一个具体路由（这里用「已保存但目录里消失」的那条，保证是可点击的非默认值）
+  // 1. 用复合选择器选一个具体路由（这里用「已保存但目录里消失」的那条，保证是可点的非默认值）
   let tree = live.paint(section.component({ close: () => {} }))
-  let select = live.find(tree, (node) => node.type === 'select' && node.props.id === 'tm-auditor')
-  assert.ok(select, '审计模型必须有可交互的下拉（宿主 Menu 不可用时降级为原生 select）')
-  select.props.onChange({ target: { value: 'prov/m1' } })
+  let trigger = live.find(tree, (node) => node.type === 'button' && node.props.id === 'tm-auditor')
+  assert.ok(trigger, '审计模型必须有可交互的复合选择器')
+  trigger.props.onClick()
   tree = live.paint(section.component({ close: () => {} }))
-  select = live.find(tree, (node) => node.type === 'select' && node.props.id === 'tm-auditor')
-  assert.equal(select.props.value, 'prov/m1', '选择后输入框应回显所选路由')
+  const modelItem = live.find(tree, (node) => node.type === 'button' && node.props['data-model-key'] === 'prov/m1')
+  assert.ok(modelItem, '面板里必须能点到目标模型')
+  modelItem.props.onClick()
+  tree = live.paint(section.component({ close: () => {} }))
+  trigger = live.find(tree, (node) => node.type === 'button' && node.props.id === 'tm-auditor')
+  assert.ok(JSON.stringify(trigger).includes('prov/m1'), '选择后触发按钮应回显所选路由')
 
   // 2. 点保存：宿主返回 false
   const saveButton = live.find(tree, (node) => node.type === 'button' && String(node.props.className).includes('is-primary'))
@@ -347,8 +355,8 @@ test('mutate 返回 false：显示 SAVE_REJECTED，保留用户选择，不清�
   assert.equal(statusText, mod.__test.SAVE_REJECTED, '被拒时必须显示 SAVE_REJECTED，不能显示「已保存」')
   assert.ok(String(status.props.className).includes('is-error'), '被拒状态必须是错误样式')
 
-  select = live.find(tree, (node) => node.type === 'select' && node.props.id === 'tm-auditor')
-  assert.equal(select.props.value, 'prov/m1', '被拒后必须保留用户选择，不能清空')
+  trigger = live.find(tree, (node) => node.type === 'button' && node.props.id === 'tm-auditor')
+  assert.ok(JSON.stringify(trigger).includes('prov/m1'), '被拒后必须保留用户选择，不能清空')
   const afterSave = live.find(tree, (node) => node.type === 'button' && String(node.props.className).includes('is-primary'))
   assert.equal(afterSave.props.disabled, false, '被拒后保存按钮应仍可用（dirty 未清）')
 
@@ -441,27 +449,70 @@ test('UI：模型有推理档位才渲染等级选择器，换模型后消失', 
   mod.apply(ctx)
   const section = collected.find((entry) => entry.options.name === 'settings.section')
 
-  // 首屏：三档都跟随默认 → 没有任何推理等级选择器
+  const triggerOf = (node, id) => live.find(node, (element) => element.type === 'button' && element.props.id === id)
+  const openPanel = (node, id) => {
+    triggerOf(node, id).props.onClick()
+    return live.paint(section.component({ close: () => {} }))
+  }
+  const effortItems = (node) => live.findAll(node, (element) => element.type === 'button' && element.props['data-effort-key'] !== undefined)
+  const modelItems = (node) => live.findAll(node, (element) => element.type === 'button' && element.props['data-model-key'] !== undefined)
+
+  // 首屏：面板未打开
   let tree = live.paint(section.component({ close: () => {} }))
   await new Promise((resolve) => setTimeout(resolve, 0))
   tree = live.paint(section.component({ close: () => {} }))
-  const reasoningSelects = (node) => live.findAll(node, (element) => element.type === 'select' && String(element.props.id || '').endsWith('-reasoning'))
-  assert.equal(reasoningSelects(tree).length, 0, '未选模型时不应出现等级选择器')
+  assert.equal(live.findAll(tree, (element) => element.props && element.props.role === 'menu').length, 0, '未展开时不应渲染面板')
 
-  // 选一个声明了档位的模型 → 该行出现等级选择器
-  live.find(tree, (node) => node.type === 'select' && node.props.id === 'tm-auditor').props.onChange({ target: { value: 'p/m1' } })
-  tree = live.paint(section.component({ close: () => {} }))
-  const reasoning = live.find(tree, (node) => node.type === 'select' && node.props.id === 'tm-auditor-reasoning')
-  assert.ok(reasoning, '模型声明了推理档位时必须渲染等级选择器')
-  const dump = JSON.stringify(reasoning)
-  assert.ok(dump.includes('高'), '等级选项应包含模型声明的档位名')
-  assert.ok(dump.includes('跟随模型默认'), '首项应为跟随模型默认')
-  assert.equal(reasoningSelects(tree).length, 1, '只有所选中模型有档位的那一行渲染等级选择器')
+  // 展开：面板含搜索框 + 模型区 + 触发按钮上的「模型名 · 等级」
+  tree = openPanel(tree, 'tm-auditor')
+  const panel = live.find(tree, (element) => element.props && element.props.role === 'menu')
+  assert.ok(panel, '展开后必须有 role=menu 的面板')
+  assert.ok(live.find(panel, (element) => element.type === 'input' && element.props.type === 'search'), '面板上半必须有搜索框')
+  assert.equal(modelItems(panel).length >= 2, true, '面板上半必须列出模型')
+  assert.equal(effortItems(panel).length, 0, '所选模型未声明档位时，下半不出现推理等级区')
 
-  // 换到没有档位的模型 → 等级选择器消失
-  live.find(tree, (node) => node.type === 'select' && node.props.id === 'tm-auditor').props.onChange({ target: { value: 'p/m2' } })
+  // 选一个有档位的模型 → 面板下半出现等级区
+  const m1 = live.find(panel, (element) => element.type === 'button' && element.props['data-model-key'] === 'p/m1')
+  m1.props.onClick()
   tree = live.paint(section.component({ close: () => {} }))
-  assert.equal(reasoningSelects(tree).length, 0, '无档位模型不应渲染等级选择器')
+  tree = openPanel(tree, 'tm-auditor')
+  const panel2 = live.find(tree, (element) => element.props && element.props.role === 'menu')
+  const efforts = effortItems(panel2)
+  assert.equal(efforts.length, 3, '等级区应有「跟随模型默认」+ 两档')
+  // R1 回归：模型区与等级区各自可滚动，等级区的当前值必须落在可视区内而不是被面板裁掉。
+  assert.ok(JSON.stringify(panel2).includes('tm-panel-models'), '模型分区需要独立滚动容器')
+  assert.ok(JSON.stringify(panel2).includes('tm-panel-efforts'), '等级分区需要独立滚动容器')
+  const selectedEffort = efforts.filter((item) => String(item.props['aria-selected']) === 'true')
+  assert.equal(selectedEffort.length, 1, '等级区必须有且只有一个当前项（带对勾）')
+  assert.ok(JSON.stringify(efforts).includes('高'), '等级区应包含模型声明的档位名')
+
+  // 选一个等级 → 触发按钮显示「模型名 · 等级」
+  const high = live.find(panel2, (element) => element.type === 'button' && element.props['data-effort-key'] === 'high')
+  high.props.onClick()
+  tree = live.paint(section.component({ close: () => {} }))
+  const trigger = triggerOf(tree, 'tm-auditor')
+  assert.ok(JSON.stringify(trigger).includes('·'), '触发按钮应同时显示模型与推理等级')
+  assert.ok(JSON.stringify(trigger).includes('高'), '触发按钮应回显所选等级')
+
+  // 换到没有档位的模型 → 面板下半不再出现等级区
+  tree = openPanel(tree, 'tm-auditor')
+  const panel3 = live.find(tree, (element) => element.props && element.props.role === 'menu')
+  live.find(panel3, (element) => element.type === 'button' && element.props['data-model-key'] === 'p/m2').props.onClick()
+  tree = live.paint(section.component({ close: () => {} }))
+  tree = openPanel(tree, 'tm-auditor')
+  const panel4 = live.find(tree, (element) => element.props && element.props.role === 'menu')
+  assert.equal(effortItems(panel4).length, 0, '无档位模型不应渲染等级区')
+})
+
+
+// R1 回归（面板裁切当前推理等级）：面板总高必须留够，且两个分区各自滚动。
+// 静态守卫 CSS，行为侧由真机截图与 scrollIntoView 保证。
+test('面板布局：总高足够且模型区/等级区各自滚动', () => {
+  const clientSource = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8')
+  assert.match(clientSource, /\.tm-panel\{[^}]*max-height:min\(560px,80vh\)/, '面板总高需覆盖「搜索框 + 模型区 + 等级区」')
+  assert.match(clientSource, /\.tm-panel-models\{[^}]*overflow:auto/, '模型区必须独立滚动')
+  assert.match(clientSource, /\.tm-panel-efforts\{[^}]*overflow:auto/, '等级区必须独立滚动')
+  assert.ok(clientSource.includes('scrollIntoView'), '打开面板时需把当前选中项滚入可视区')
 })
 
 test('inject 声明覆盖 client.js 访问的全部 ctx 服务（至少 configForms）', () => {
