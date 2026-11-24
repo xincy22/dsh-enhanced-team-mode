@@ -32,6 +32,13 @@ export function createProjectionDefinition(z) {
     init: emptyState,
     apply(state, event) {
       if (event.type === 'turn/start') return { ...state, turn: event.data.turn }
+      // 压缩会用具名 checkpoint 以 surfaceOp=replace 折掉一段 surface：被折进去的 team-mode 指令
+      // 不再对模型可见，但日志里还在、本投影仍记着「已注入」。压缩成功（无 error）时把注入状态
+      // 归零，让下一轮第一步重新走 first-independent-task；失败压缩不重置，避免误判。
+      // 只在 compaction/end 上重置：start 未完成、summary 是中间产物、prune 只清工具结果。
+      if (event.type === 'compaction/end' && event.data?.error === undefined) {
+        return { ...state, taskEpoch: 0, lastInjectedTurn: null, lastInjectedMessageId: null }
+      }
       if (event.type === 'user/message' && event.data?.source?.kind === KIND) {
         return {
           ...state,
