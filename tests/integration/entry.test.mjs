@@ -26,7 +26,7 @@ test('真实 index.js 的 Config 在真实 schemastery 下可构造', () => {
   assert.equal(typeof entry.Config, 'function')
   const config = entry.Config({})
   // 角色集合以 src/settings/constants.js 的 ROLES 为准，不硬编码角色数量。
-  assert.deepEqual(Object.keys(config).sort(), [...ROLES].sort())
+  assert.deepEqual(Object.keys(config).sort(), [...ROLES, 'auditMode'].sort())
 })
 
 test('apply() 接线：注册投影、pre-step、工具与 Skill；工具受团队开关门控', async () => {

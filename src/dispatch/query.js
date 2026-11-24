@@ -59,10 +59,14 @@ export async function queryRoutes({ ctx, config, agent, policyHandle, parentRout
   }
   const resolved = resolveRoutes({ store, catalog, parentRoute })
   const allProblems = [...problems, ...resolved.problems]
+  const auditOff = store.auditMode?.background === false && store.auditMode?.finalReview === false
+  const routing = renderRoutingBlock({ routes: resolved.routes, problems: allProblems })
+  const note = auditOff ? '审计席未启用（两个审计开关都关）：auditor 路由不会被派发。' : ''
+  const text = note.length === 0 ? routing : (routing.length > 0 ? routing + '\n\n' + note : note)
   return {
     routes: resolved.routes,
     problems: allProblems,
-    text: renderRoutingBlock({ routes: resolved.routes, problems: allProblems }),
+    text,
   }
 }
 
@@ -73,7 +77,7 @@ export async function queryRoutes({ ctx, config, agent, policyHandle, parentRout
  */
 export function renderQueryAnswer(resolved) {
   if (resolved.text.length > 0) return resolved.text
-  return '当前审计、能力型执行与机械执行模型都跟随 DSH 默认：新建成员时省略 provider 与 model，继承父路由。'
+  return '当前审计、能力型执行与讲解模型都跟随 DSH 默认：新建成员时省略 provider 与 model，继承父路由。'
 }
 
 export { composeInstruction }

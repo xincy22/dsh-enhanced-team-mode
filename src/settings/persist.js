@@ -54,6 +54,18 @@ export function mutateOps(role, selection) {
 }
 
 /**
+ * 把两个审计开关转换成设置写入操作。
+ * @param {{background: boolean, finalReview: boolean}} mode - 开关状态。
+ * @returns {Array<{op: 'set', path: string[], value: boolean}>} 路径操作。
+ */
+export function mutateAuditMode(mode) {
+  return [
+    { op: 'set', path: ['auditMode', 'background'], value: mode?.background !== false },
+    { op: 'set', path: ['auditMode', 'finalReview'], value: mode?.finalReview !== false },
+  ]
+}
+
+/**
  * @param {string} role - 角色。
  * @param {string} field - provider、model 或 reasoningEffort。
  * @param {string} value - 写入值。

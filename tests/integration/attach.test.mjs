@@ -15,6 +15,32 @@ async function firstTask(h, session, text = '把插件骨架搭起来') {
   return h.textOf(decision.messages)
 }
 
+const MODES = [
+  { flags: { background: true, finalReview: true }, duty: '全程并行审计', checks: true, seats: '最多 5 名' },
+  { flags: { background: true, finalReview: false }, duty: '后台持续巡检', checks: true, seats: '最多 5 名' },
+  { flags: { background: false, finalReview: true }, duty: '交付终审', checks: true, seats: '最多 5 名' },
+  { flags: { background: false, finalReview: false }, duty: '本会话不设审计席', checks: false, seats: '最多 4 名' },
+]
+
+test('四个审计组合：注入文本按开关取职责变体与检查段', async () => {
+  for (const mode of MODES) {
+    const h = makeHarness({ authorized: [FLASH, PRO] })
+    mount(h, { auditMode: mode.flags })
+    const session = h.session('s-' + JSON.stringify(mode.flags))
+    const text = await firstTask(h, session)
+    assert.ok(text.includes(mode.duty), '组合缺职责变体：' + JSON.stringify(mode.flags))
+    assert.ok(text.includes(mode.seats), '组合席位数不对：' + JSON.stringify(mode.flags))
+    assert.ok(text.includes('讲解席'), '组合缺讲解协议：' + JSON.stringify(mode.flags))
+    if (mode.checks) {
+      assert.ok(text.includes('三项固定检查'), '组合缺检查抬头：' + JSON.stringify(mode.flags))
+      assert.ok(text.includes('宿主能力对照'), '组合缺检查项：' + JSON.stringify(mode.flags))
+    } else {
+      assert.equal(text.includes('三项固定检查'), false, '都关不应注入检查抬头')
+      assert.equal(text.includes('宿主能力对照'), false, '都关不应注入检查项')
+    }
+  }
+})
+
 const PRO = { provider: 'opencode-go', model: 'pro' }
 const FLASH = { provider: 'opencode-go', model: 'flash' }
 

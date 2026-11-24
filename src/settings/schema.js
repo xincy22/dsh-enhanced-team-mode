@@ -32,11 +32,17 @@ export function createSettingsSchema(z) {
     const leaf = z.string().default('')
     return typeof leaf.volatile === 'function' ? leaf.volatile() : leaf
   }
+  /** 布尔叶子：两个审计开关，默认都开。与字符串叶子同样按存在性声明 volatile。 */
+  const flag = () => {
+    const leaf = z.boolean().default(true)
+    return typeof leaf.volatile === 'function' ? leaf.volatile() : leaf
+  }
   const role = () => z.object({ provider: field(), model: field(), reasoningEffort: field() })
   return z.object({
     auditor: role(),
     executor: role(),
     mechanical: role(),
+    auditMode: z.object({ background: flag(), finalReview: flag() }),
   })
 }
 
@@ -49,6 +55,7 @@ export function emptySettings() {
     auditor: { mode: 'default' },
     executor: { mode: 'default' },
     mechanical: { mode: 'default' },
+    auditMode: { background: true, finalReview: true },
   }
 }
 
@@ -107,6 +114,20 @@ export function normalizeSettings(raw) {
       throw new SettingsError('SETTINGS_INCOMPLETE_ROUTE', '设置项 ' + role + ' 只给了 provider，缺少 model')
     }
     out[role] = { mode: 'explicit', provider: p, model: m, reasoningEffort: effort }
+  }
+  const mode = raw.auditMode
+  if (mode !== undefined && mode !== null) {
+    if (typeof mode !== 'object' || Array.isArray(mode)) {
+      throw new SettingsError('SETTINGS_INVALID_AUDIT_MODE', '设置项 auditMode 必须是对象')
+    }
+    for (const key of ['background', 'finalReview']) {
+      const value = readScalar(mode[key])
+      if (value === undefined || value === null) continue
+      if (typeof value !== 'boolean') {
+        throw new SettingsError('SETTINGS_INVALID_AUDIT_MODE', '设置项 auditMode.' + key + ' 必须是布尔值')
+      }
+      out.auditMode[key] = value
+    }
   }
   return out
 }

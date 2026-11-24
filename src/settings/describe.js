@@ -6,7 +6,10 @@
  * 模块不会为了"看起来正常"而静默换成别的路由。
  */
 
-import { DEFAULT_LABEL, EFFECT_SCOPE_NOTICE, REASONING_HINT, REASONING_LABEL, ROLES, ROLE_HINTS, ROLE_LABELS } from './constants.js'
+import {
+  AUDITOR_DISABLED_HINT, AUDIT_MODE_HINTS, AUDIT_MODE_LABELS, AUDIT_STATUS, DEFAULT_LABEL, EFFECT_SCOPE_NOTICE,
+  REASONING_HINT, REASONING_LABEL, ROLES, ROLE_HINTS, ROLE_LABELS, auditModeKey,
+} from './constants.js'
 import { SettingsError } from './errors.js'
 import { resolveRole } from './resolve.js'
 
@@ -19,7 +22,29 @@ import { resolveRole } from './resolve.js'
  * @returns {Array<object>} 两行数据。
  */
 export function describeRoles({ store, catalog, parentRoute }) {
-  return ROLES.map((role) => describeRole({ role, store, catalog, parentRoute }))
+  const audit = describeAuditMode({ store })
+  return ROLES.map((role) => describeRole({ role, store, catalog, parentRoute, audit }))
+}
+
+/**
+ * 两个审计开关的行数据：当前值、组合键、状态行与审计档的说明。
+ * @param {object} input - 输入。
+ * @param {object} input.store - normalizeSettings 的结果。
+ * @returns {object} 开关数据。
+ */
+export function describeAuditMode({ store }) {
+  const mode = store?.auditMode ?? { background: true, finalReview: true }
+  const key = auditModeKey(mode)
+  return {
+    mode: key,
+    background: mode.background !== false,
+    finalReview: mode.finalReview !== false,
+    labels: AUDIT_MODE_LABELS,
+    hints: AUDIT_MODE_HINTS,
+    status: AUDIT_STATUS[key],
+    auditorDisabled: key === 'none',
+    auditorHint: key === 'none' ? AUDITOR_DISABLED_HINT : ROLE_HINTS.auditor,
+  }
 }
 
 /**
@@ -27,7 +52,7 @@ export function describeRoles({ store, catalog, parentRoute }) {
  * @param {object} input - 输入。
  * @returns {object} 行数据。
  */
-export function describeRole({ role, store, catalog, parentRoute }) {
+export function describeRole({ role, store, catalog, parentRoute, audit }) {
   const selection = store?.[role] ?? { mode: 'default' }
   const options = [{
     kind: 'default',
@@ -71,10 +96,12 @@ export function describeRole({ role, store, catalog, parentRoute }) {
       currentLabel = '不可用（' + error.code + '）'
     }
   }
+  const auditorOff = role === 'auditor' && audit?.auditorDisabled === true
   return {
     role,
     title: ROLE_LABELS[role],
-    hint: ROLE_HINTS[role],
+    hint: auditorOff ? audit.auditorHint : ROLE_HINTS[role],
+    disabled: auditorOff,
     mode: selection.mode,
     selection,
     reasoningEffort: typeof selection.reasoningEffort === 'string' ? selection.reasoningEffort : '',

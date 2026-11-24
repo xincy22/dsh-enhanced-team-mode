@@ -10,7 +10,8 @@ test('对外接口齐全，集成方只依赖这一个入口', () => {
     'createSettingsSchema', 'emptySettings', 'normalizeSettings',
     'createCatalog', 'createHostCatalog',
     'normalizeAuthorized', 'resolveAlias', 'resolveRole', 'toAgentOptions',
-    'mutateOps', 'readSettings', 'describeRole', 'describeRoles',
+    'mutateOps', 'mutateAuditMode', 'readSettings', 'describeRole', 'describeRoles', 'describeAuditMode',
+    'AUDIT_MODES', 'AUDIT_MODE_LABELS', 'AUDIT_MODE_HINTS', 'AUDIT_STATUS', 'AUDITOR_DISABLED_HINT', 'auditModeKey',
   ]) {
     assert.ok(name in settings, '缺少导出 ' + name)
   }

@@ -37,7 +37,7 @@ test('显式路由被写进指令，默认角色标注省略参数', () => {
   const block = renderRoutingBlock(resolved)
   assert.ok(block.includes('能力型执行模型：opencode-go/pro'))
   assert.ok(block.includes('审计模型：' + DEFAULT_LABEL))
-  assert.ok(block.includes('机械执行模型：opencode-go/flash'))
+  assert.ok(block.includes('讲解模型：opencode-go/flash'))
   assert.ok(block.includes('复用已有成员时不要传 provider 与 model'))
 })
 
@@ -50,7 +50,7 @@ test('mechanical 解析失败同样进问题条目', () => {
   assert.equal(resolved.routes.mechanical, undefined)
   const block = renderRoutingBlock(resolved)
   assert.ok(block.includes('SETTINGS_UNKNOWN_PROVIDER'))
-  assert.equal(block.includes('机械执行模型：ghost/m'), false)
+  assert.equal(block.includes('讲解模型：ghost/m'), false)
 })
 
 test('未授权路由变成问题条目，且指令里不出现该路由', () => {

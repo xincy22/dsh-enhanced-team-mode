@@ -119,6 +119,15 @@ test('查询工具：没有调用方时报错，不编造路由', async () => {
   await assert.rejects(() => tool.execute({}, {}), new RegExp(ROUTE_TOOL_NAME))
 })
 
+test('两个审计开关都关时，查询回答注明审计席未启用', async () => {
+  const h = makeHarness({ authorized: null })
+  const mounted = mount(h, { auditMode: { background: false, finalReview: false } })
+  const session = h.session('s-audit-off')
+  const resolved = await mounted.query(h.makeAgent(session))
+  assert.ok(resolved.text.includes('审计席未启用'), resolved.text)
+  assert.ok(resolved.text.includes('auditor 路由不会被派发'), resolved.text)
+})
+
 test('都跟随默认时给出一句明确回答，而不是空串', () => {
   const answer = renderQueryAnswer({ routes: {}, problems: [], text: '' })
   assert.ok(answer.includes('跟随 DSH 默认'))

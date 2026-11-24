@@ -5,7 +5,7 @@
  * 拼进协作指令。任何一步失败都变成指令里的问题条目，不吞掉、不换模型。
  */
 
-import { COORDINATOR_INSTRUCTION } from '../inject/instruction.js'
+import { composeCoordinatorInstruction } from '../inject/instruction.js'
 import { emptySettings } from '../settings/schema.js'
 import { readSettings } from '../settings/persist.js'
 import { createHostCatalog } from '../settings/catalog.js'
@@ -27,7 +27,10 @@ import { queryRoutes } from './query.js'
  * @returns {Promise<object>} 注入接线返回的投影句柄。
  */
 export function attach(ctx, deps) {
-  const { config, createUserMessage, z, instructionBase = COORDINATOR_INSTRUCTION, onDecision } = deps
+  const { config, createUserMessage, z, instructionBase, onDecision } = deps
+  // 审计开关在插件加载时读取一次；按组合拼出注入文本（讲解协议恒在）。
+  const auditMode = readStore(config).store.auditMode
+  const composedBase = typeof instructionBase === 'string' ? instructionBase : composeCoordinatorInstruction(auditMode)
   const policyReady = ctx.sessionProjections.register(createPolicyProjection(z))
 
   /** 派发前按需读取当前配置的入口：同一个配置对象、同一份会话授权。 */
@@ -42,7 +45,7 @@ export function attach(ctx, deps) {
     onDecision,
     instructionFor: async (agent, signal) => {
       const resolved = await resolveForAgent({ ctx, config, agent, signal, policyReady })
-      return composeInstruction(instructionBase, resolved)
+      return composeInstruction(composedBase, resolved)
     },
   })
 

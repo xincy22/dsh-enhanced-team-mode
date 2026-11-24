@@ -8,23 +8,25 @@ const volatileCalls = []
 const leaf = { default: () => leaf, volatile: () => { volatileCalls.push(1); return leaf } }
 const z = {
   string: () => leaf,
+  boolean: () => leaf,
   object: (shape) => ({ shape }),
 }
 
-test('schema 暴露三个角色、每个角色三个叶子字段（含 reasoningEffort）', () => {
+test('schema 暴露三个角色与 auditMode，每个角色三个叶子字段', () => {
   const schema = createSettingsSchema(z)
-  assert.deepEqual(Object.keys(schema.shape), ['auditor', 'executor', 'mechanical'])
+  assert.deepEqual(Object.keys(schema.shape), ['auditor', 'executor', 'mechanical', 'auditMode'])
   for (const role of ['auditor', 'executor', 'mechanical']) {
     assert.deepEqual(Object.keys(schema.shape[role].shape), ['provider', 'model', 'reasoningEffort'])
   }
+  assert.deepEqual(Object.keys(schema.shape.auditMode.shape), ['background', 'finalReview'])
 })
 
 // 真机回归：宿主只把带 volatile 标记的字段放进可写设置文档；缺标记时该 entry 不会出现在
 // settings/describe 的命名空间里，configForms.get(entryId) 拿到空壳、mutate 必被拒（实测返回 false）。
-test('九个叶子字段全部声明 volatile，宿主才会提供可写设置命名空间', () => {
+test('十一个叶子字段全部声明 volatile，宿主才会提供可写设置命名空间', () => {
   volatileCalls.length = 0
   createSettingsSchema(z)
-  assert.equal(volatileCalls.length, 9, '三个角色 × 三个字段都要 volatile')
+  assert.equal(volatileCalls.length, 11, '三个角色 × 三个字段 + 两个审计开关都要 volatile')
 })
 
 test('空配置归一为三角色都跟随默认', () => {
@@ -88,6 +90,21 @@ test('推理等级：旧配置缺字段归一为空串，显式档位原样透�
   assert.deepEqual(orphan.auditor, { mode: 'default' })
   // 类型不对仍然报错，不静默吞掉。
   assert.throws(() => normalizeSettings({ auditor: { provider: 'p', model: 'm', reasoningEffort: 1 } }), /SETTINGS_INVALID_ROLE/)
+})
+
+test('审计开关：缺省两个都开，部分设置保留另一个', () => {
+  assert.deepEqual(normalizeSettings(undefined).auditMode, { background: true, finalReview: true })
+  assert.deepEqual(normalizeSettings({}).auditMode, { background: true, finalReview: true })
+  assert.deepEqual(normalizeSettings({ auditMode: { background: false } }).auditMode, { background: false, finalReview: true })
+  assert.deepEqual(normalizeSettings({ auditMode: { finalReview: false } }).auditMode, { background: true, finalReview: false })
+  assert.deepEqual(normalizeSettings({ auditMode: { background: false, finalReview: false } }).auditMode, { background: false, finalReview: false })
+})
+
+test('审计开关：旧配置缺 auditMode 段零迁移，非法值报错', () => {
+  const legacy = normalizeSettings({ executor: { provider: 'p', model: 'm' } })
+  assert.deepEqual(legacy.auditMode, { background: true, finalReview: true })
+  assert.throws(() => normalizeSettings({ auditMode: 'nope' }), /SETTINGS_INVALID_AUDIT_MODE/)
+  assert.throws(() => normalizeSettings({ auditMode: { background: 'yes' } }), /SETTINGS_INVALID_AUDIT_MODE/)
 })
 
 test('非法输入形状被拒绝', () => {

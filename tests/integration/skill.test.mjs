@@ -2,7 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { loadSkill, parseSkillFile, registerSkill, SKILL_NAME } from '../../src/skill/register.js'
-import { AUDIT_CHECKS, AUDIT_CHECKS_INTRO, CORE_DUTIES, COORDINATOR_INSTRUCTION, SCOPE_LINE, SKILL_POINTER } from '../../src/inject/instruction.js'
+import {
+  AUDIT_CHECKS, AUDIT_DUTY, AUDIT_INTRO, CORE_DUTIES, COORDINATOR_INSTRUCTION, DUTY_STATIC, EXPLAINER_PROTOCOL,
+  SCOPE_LINE, SKILL_POINTER, composeCoordinatorInstruction,
+} from '../../src/inject/instruction.js'
 
 
 const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
@@ -28,7 +31,7 @@ test('前置区缺失时直接报错', () => {
 test('插件自带技能文件可解析，名字与常量一致', () => {
   assert.equal(skill.name, SKILL_NAME)
   assert.ok(skill.description.startsWith('适用于'))
-  assert.ok(skill.content.includes('## 审计常驻循环'))
+  assert.ok(skill.content.includes('## 审计席的持续运行'))
 })
 
 test('漂移守卫：六条核心职责在技能里逐字一致', () => {
@@ -54,29 +57,31 @@ test('手册写明按需使用、模式关闭时的限制，不承诺自动失�
   assert.ok(skill.content.includes('不保证历史里的旧指令自动失效'))
 })
 
-test('手册写明开工研判契约、落盘路径与两阶段', () => {
+test('手册写明任务卡字段、调研独立任务与审计不参与前置', () => {
   for (const field of ['问题陈述', '范围与非目标', '验收标准', '风险', '未知项', '证据位置']) {
-    assert.ok(skill.content.includes(field), '契约缺字段：' + field)
+    assert.ok(skill.content.includes(field), '任务卡缺字段：' + field)
   }
-  assert.ok(skill.content.includes('## 开工研判（阶段 0）'))
+  assert.ok(skill.content.includes('## 任务卡与调研任务'))
   assert.ok(skill.content.includes('.reports/recon/'))
   assert.ok(skill.content.includes('变更记录'))
-  assert.ok(skill.content.includes('阶段 N'))
-  assert.ok(skill.content.includes('任务 id 与 revision'))
+  assert.ok(skill.content.includes('调研是任务板上的独立任务'))
+  assert.ok(skill.content.includes('审计席可以读、可以提出问题，但不写卡、不做调研、不参与派发前置'))
+  assert.equal(skill.content.includes('## 开工研判（阶段 0）'), false, '旧的开工研判节应已删除')
 })
 
-test('职责写明接单确认与阻塞预算，禁令限于实施', () => {
+test('职责写明调研归属、讲解席与审计不阻塞派发', () => {
   const duty5 = CORE_DUTIES[4]
-  assert.ok(duty5.includes('阶段 0'))
-  assert.ok(duty5.includes('阶段 N'))
+  assert.ok(duty5.includes('由独立成员全程并行审计'))
   assert.ok(duty5.includes('不得成为实施者'))
   assert.ok(duty5.includes('不代修'))
-  assert.ok(duty5.includes('「接受」或「质疑」'))
+  assert.ok(duty5.includes('线尾终审'))
   assert.equal(duty5.includes('开工即与执行成员并行启动'), false)
   const duty3 = CORE_DUTIES[2]
   assert.ok(duty3.includes('.reports/recon/'))
-  assert.ok(duty3.includes('机械任务'))
-  assert.ok(duty3.includes('一个回合'))
+  assert.ok(duty3.includes('讲解席 1 名'))
+  assert.ok(duty3.includes('机械任务由能力型执行成员承担'))
+  assert.ok(duty3.includes('调研是任务板上的独立任务'))
+  assert.ok(duty3.includes('审计席不参与这个前置'))
 })
 
 test('手册不引入定时器或轮询机制', () => {
@@ -87,8 +92,8 @@ test('手册不引入定时器或轮询机制', () => {
 
 test('三项审计固定检查：注入与 Skill 逐字一致，顺序不变', () => {
   assert.equal(AUDIT_CHECKS.length, 3)
-  assert.ok(COORDINATOR_INSTRUCTION.includes(AUDIT_CHECKS_INTRO))
-  assert.ok(skill.content.includes(AUDIT_CHECKS_INTRO))
+  assert.ok(COORDINATOR_INSTRUCTION.includes(AUDIT_INTRO.both))
+  assert.ok(skill.content.includes(AUDIT_INTRO.both))
   for (const check of AUDIT_CHECKS) {
     assert.ok(COORDINATOR_INSTRUCTION.includes(check), '注入缺检查项：' + check.slice(0, 12))
     assert.ok(skill.content.includes(check), 'Skill 缺检查项：' + check.slice(0, 12))
@@ -97,11 +102,15 @@ test('三项审计固定检查：注入与 Skill 逐字一致，顺序不变', (
   assert.deepEqual(order, [...order].sort((a, b) => a - b), 'Skill 里的三项检查顺序与注入不一致')
 })
 
-test('阶段 0 与阶段 N 的清单都列出三项检查', () => {
-  const phase0 = '固定检查（阶段 0）：A 宿主能力对照、B 重复实现、C 导入边界'
-  const phaseN = '固定检查（阶段 N）：A 宿主能力对照、B 重复实现、C 导入边界'
-  assert.ok(skill.content.includes(phase0), '缺少阶段 0 清单')
-  assert.ok(skill.content.includes(phaseN), '缺少阶段 N 清单')
+test('三种审计检查抬头在 Skill 里逐字存在，注入按组合取其一', () => {
+  for (const [key, intro] of Object.entries(AUDIT_INTRO)) {
+    assert.ok(skill.content.includes(intro), 'Skill 缺检查抬头：' + key)
+    assert.ok(composeCoordinatorInstruction(key === 'both'
+      ? { background: true, finalReview: true }
+      : key === 'background'
+        ? { background: true, finalReview: false }
+        : { background: false, finalReview: true }).includes(intro), '注入缺检查抬头：' + key)
+  }
   assert.ok(skill.content.includes('缺证据的判定无效'))
 })
 
@@ -128,6 +137,33 @@ test('宿主能力对照要求 asar 证据，三个分支缺证据或缺理由�
   assert.ok(AUDIT_CHECKS[2].includes('inject'))
 })
 
+test('席位文案不再出现机械执行席，讲解席在注入与 Skill 中都有', () => {
+  const constantsSrc = readFileSync(new URL('../../src/settings/constants.js', import.meta.url), 'utf8')
+  const querySrc = readFileSync(new URL('../../src/dispatch/query.js', import.meta.url), 'utf8')
+  const product = { 'instruction.js': instructionSrc, 'SKILL.md': skill.content, 'constants.js': constantsSrc, 'lib/client.js': clientSrc, 'query.js': querySrc, 'PLAN.md': planSrc, 'README.md': readmeSrc }
+  for (const [name, text] of Object.entries(product)) {
+    assert.equal(text.includes('机械执行模型'), false, name + ' 仍含旧席位名')
+    assert.equal(text.includes('机械席'), false, name + ' 仍含旧席位简称')
+  }
+  assert.ok(instructionSrc.includes('讲解席'))
+  assert.ok(constantsSrc.includes('讲解模型'))
+  assert.ok(constantsSrc.includes('建议与执行席同级'))
+  assert.ok(clientSrc.includes('讲解模型'))
+})
+
+test('讲解协议逐字在注入与 Skill，三档、判据与边界齐全', () => {
+  assert.ok(COORDINATOR_INSTRUCTION.includes(EXPLAINER_PROTOCOL))
+  assert.ok(skill.content.includes(EXPLAINER_PROTOCOL))
+  for (const token of ['D1', 'D2', 'D3', '机制', '证据（文件:行号）', '一句话本质', '可复述', '可定位', '可预测', '不研判', '不审计', '不产出交付物', '不改文件', '不接调研']) {
+    assert.ok(EXPLAINER_PROTOCOL.includes(token), '协议缺要素：' + token)
+  }
+  // 注入顺序：审计检查之后、技能指针之前。第三步拆四变体时，本断言改为逐组合检查。
+  const checksEnd = COORDINATOR_INSTRUCTION.indexOf(AUDIT_CHECKS[2])
+  const explainerAt = COORDINATOR_INSTRUCTION.indexOf(EXPLAINER_PROTOCOL)
+  const pointerAt = COORDINATOR_INSTRUCTION.indexOf(SKILL_POINTER)
+  assert.ok(checksEnd > 0 && explainerAt > checksEnd && pointerAt > explainerAt, '讲解协议注入位置不对')
+})
+
 test('产品文案不再出现旧术语 PLATFORM_MODULES', () => {
   const legacy = 'PLATFORM_MODULES'
   const product = { 'README.md': readmeSrc, 'PLAN.md': planSrc, 'lib/client.js': clientSrc, 'instruction.js': instructionSrc, 'SKILL.md': skill.content }
@@ -141,14 +177,29 @@ test('产品文案不再出现旧术语 PLATFORM_MODULES', () => {
   assert.ok(clientSrc.includes('platform-singleton'))
 })
 
-test('阶段 0 与阶段 N 对可直接复用同严格度', () => {
-  const phase0 = '固定检查（阶段 0）：A 宿主能力对照、B 重复实现、C 导入边界，逐项给出结论与证据，判定标准与阶段 N 相同'
-  const phaseN = '固定检查（阶段 N）：A 宿主能力对照、B 重复实现、C 导入边界。三个分支都要有宿主证据与判定理由'
-  assert.ok(skill.content.includes(phase0), '阶段 0 清单未对齐判定标准')
-  assert.ok(skill.content.includes(phaseN), '阶段 N 清单未写明三个分支的证据与理由要求')
-  assert.ok(skill.content.includes('可直接复用另须给出接入方式四要素（能力名称、引用入口、额外声明、版本或来源约束）'))
-  assert.ok(skill.content.includes('可直接复用另核接入方式四要素（能力名称、引用入口、额外声明、版本或来源约束）'))
-  assert.ok(skill.content.includes('可直接复用缺接入方式四要素同样无效'))
+test('四组合矩阵：职责、抬头、检查与席位数逐项正确', () => {
+  const modes = [
+    { flags: { background: true, finalReview: true }, key: 'both', seats: '最多 5 名', checks: true },
+    { flags: { background: true, finalReview: false }, key: 'background', seats: '最多 5 名', checks: true },
+    { flags: { background: false, finalReview: true }, key: 'finalReview', seats: '最多 5 名', checks: true },
+    { flags: { background: false, finalReview: false }, key: 'none', seats: '最多 4 名', checks: false },
+  ]
+  for (const mode of modes) {
+    const text = composeCoordinatorInstruction(mode.flags)
+    assert.ok(text.includes(AUDIT_DUTY[mode.key]), '组合 ' + mode.key + ' 缺职责变体')
+    assert.ok(text.includes(DUTY_STATIC[2]), '组合 ' + mode.key + ' 缺第 3 条')
+    assert.ok(text.includes(mode.seats), '组合 ' + mode.key + ' 席位数不对')
+    assert.ok(text.includes(EXPLAINER_PROTOCOL), '组合 ' + mode.key + ' 缺讲解协议')
+    if (mode.checks) {
+      assert.ok(text.includes(AUDIT_INTRO[mode.key]), '组合 ' + mode.key + ' 缺检查抬头')
+      for (const check of AUDIT_CHECKS) assert.ok(text.includes(check), '组合 ' + mode.key + ' 缺检查项')
+    } else {
+      assert.equal(text.includes(AUDIT_CHECKS[0]), false, '都关时不应注入检查项')
+      assert.equal(text.includes('三项固定检查'), false, '都关时不应注入检查抬头')
+    }
+    assert.equal(skill.content.includes(AUDIT_DUTY[mode.key]), true, 'Skill 缺职责变体 ' + mode.key)
+  }
+  assert.equal(COORDINATOR_INSTRUCTION, composeCoordinatorInstruction({ background: true, finalReview: true }))
 })
 
 test('证据行号优先引宿主源码，构建产物仅作退路', () => {
