@@ -24,6 +24,24 @@ export const ROLE_HINTS = {
   mechanical: '讲解席（1 名）：讲清项目机制、接口与实现路径，建议与执行席同级',
 }
 
+/**
+ * 席位英文名的单一来源。键与 ROLES 一致（零迁移），中文类别名保留。
+ * 名字只体现气质，不固定分工；子成员 name 不得用 leader 或 lead。
+ */
+export const SEAT_EN_NAMES = {
+  leader: 'leader',
+  auditor: 'Argus',
+  executor: 'Atlas',
+  mechanical: 'Mentor',
+}
+
+/** 席位实例名。执行席按序号区分，讲解席与审计席各一名、不带序号。 */
+export const SEAT_INSTANCE_NAMES = {
+  executor: ['atlas-1', 'atlas-2', 'atlas-3'],
+  mechanical: ['mentor'],
+  auditor: ['argus'],
+}
+
 /** 顶部唯一一句说明：模型与推理等级合在一个控件里，推理等级只在模型声明档位时可选。 */
 export const SELECT_HINT = '每档为新建成员选「模型 + 推理等级」；空值跟随 DSH 默认，推理等级仅在模型声明档位时可选。'
 

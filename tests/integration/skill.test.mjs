@@ -312,3 +312,71 @@ test('清单声明客户端半与包内技能，便于打包', () => {
   assert.ok(pkg.files.includes('skills'))
   assert.ok(pkg.files.includes('lib/client.js'))
 })
+
+// ==== task-45：席位英文名与审计反馈分级路由 ====
+import { SEAT_EN_NAMES as CONST_SEAT_EN, SEAT_INSTANCE_NAMES } from '../../src/settings/constants.js'
+import { SEAT_DISPATCH_LINE } from '../../src/inject/instruction.js'
+
+test('task-45 英文名单一来源：constants 与 instruction 一致且实例名合法', () => {
+  assert.deepEqual({ ...CONST_SEAT_EN }, { leader: 'leader', auditor: 'Argus', executor: 'Atlas', mechanical: 'Mentor' })
+  // instruction 侧经 SEAT_DISPATCH_LINE 使用同一常量，不另写一份
+  assert.ok(SEAT_DISPATCH_LINE.includes(CONST_SEAT_EN.executor))
+  assert.ok(SEAT_DISPATCH_LINE.includes(CONST_SEAT_EN.mechanical))
+  assert.ok(SEAT_DISPATCH_LINE.includes(CONST_SEAT_EN.auditor))
+  assert.ok(SEAT_DISPATCH_LINE.includes(CONST_SEAT_EN.leader))
+  assert.deepEqual([...SEAT_INSTANCE_NAMES.executor], ['atlas-1', 'atlas-2', 'atlas-3'])
+  assert.deepEqual([...SEAT_INSTANCE_NAMES.mechanical], ['mentor'])
+  assert.deepEqual([...SEAT_INSTANCE_NAMES.auditor], ['argus'])
+  for (const name of [...SEAT_INSTANCE_NAMES.executor, ...SEAT_INSTANCE_NAMES.mechanical, ...SEAT_INSTANCE_NAMES.auditor]) {
+    assert.match(name, /^[a-z][a-z0-9-]{0,31}$/, '子成员 name 必须符合宿主约束：' + name)
+  }
+})
+
+test('task-45 注入含四名字与实例名，且不得指示用 leader/lead 作子成员 name', () => {
+  for (const mode of [{ background: true, finalReview: true }, { background: true, finalReview: false }, { background: false, finalReview: true }]) {
+    const text = composeCoordinatorInstruction(mode)
+    assert.ok(text.includes('leader') && text.includes('Atlas') && text.includes('Mentor') && text.includes('Argus'), '注入必须含四个英文名')
+    for (const instance of ['atlas-1', 'atlas-2', 'atlas-3', 'mentor', 'argus']) assert.ok(text.includes(instance), '注入必须含实例名 ' + instance)
+    assert.ok(text.includes('名字只体现气质，不固定分工'), '注入必须写明名字不固定分工')
+  }
+  assert.equal(/name\s*=\s*(leader|lead)\b/.test(COORDINATOR_INSTRUCTION), false, '不得指示把 leader/lead 用作子成员 name')
+  assert.ok(/子成员 name 不得用 leader 或 lead/.test(COORDINATOR_INSTRUCTION), '必须显式禁止 leader/lead 作子成员 name')
+})
+
+test('task-45 分级路由：两个审计变体都有新句，旧句不再出现', () => {
+  for (const key of ['both', 'background']) {
+    const text = AUDIT_DUTY[key]
+    assert.ok(text.includes('按分级路由'), key + ' 变体必须写分级路由')
+    assert.ok(text.includes('小问题直接发给对应席位并记账'), key + ' 变体必须写小问题路由')
+    assert.ok(text.includes('不自行派发任务'), key + ' 变体必须写审计席不自行派发')
+  }
+  assert.ok(AUDIT_DUTY.both.includes('由你决定是否派发'), 'both 变体写明由 leader 决定派发')
+  assert.ok(AUDIT_DUTY.background.includes('由你派发'), 'background 变体写明由 leader 派发')
+  // finalReview / none 无路由句，不得被改动
+  assert.equal(AUDIT_DUTY.finalReview.includes('按分级路由'), false)
+  assert.equal(AUDIT_DUTY.none.includes('按分级路由'), false)
+  // 旧措辞反向：产品文案不再出现
+  for (const [name, src] of [['instruction.js', instructionSrc], ['SKILL.md', skill.content], ['PLAN.md', planSrc], ['README.md', readmeSrc]]) {
+    assert.equal(src.includes('发现问题直接发给对应席位，需要决策的报给你'), false, name + ' 不应再含旧句')
+    assert.equal(src.includes('发现直接发给对应席位；跨席冲突'), false, name + ' 不应再含旧流程句')
+  }
+})
+
+test('task-45 SKILL 六条判据、账本状态机与终审阻塞', () => {
+  for (const keyword of ['影响已定验收标准', '与用户已拍板决策冲突', '涉及架构取舍', '需重新拆分任务', '阻塞其他席位', '跨席位或跨模块']) {
+    assert.ok(skill.content.includes(keyword), 'SKILL 必须含判据关键词：' + keyword)
+  }
+  assert.ok(skill.content.includes('同一根因在同一任务线累计三条小问题，升为大问题'), 'SKILL 必须写三条升格')
+  assert.ok(skill.content.includes('已上报') && skill.content.includes('已转派'), 'SKILL 必须写账本状态机')
+  assert.ok(skill.content.includes('存在「已上报」未处置判阻塞'), 'SKILL 必须写终审判阻塞')
+  assert.ok(skill.content.includes('已接受风险'), 'SKILL 必须写已接受风险')
+  assert.ok(skill.content.includes('路由：直接给某席'), 'SKILL 发现格式必须补路由行')
+})
+
+test('task-45 浏览器半 hint 与 constants 的 SEAT_EN_NAMES 一致', () => {
+  const hintBlock = clientSrc.slice(clientSrc.indexOf('const ROLES = ['), clientSrc.indexOf('// 两个审计开关'))
+  assert.ok(hintBlock.includes(CONST_SEAT_EN.executor), '执行席 hint 必须含 Atlas')
+  assert.ok(hintBlock.includes(CONST_SEAT_EN.mechanical), '讲解席 hint 必须含 Mentor')
+  assert.ok(hintBlock.includes(CONST_SEAT_EN.auditor), '审计席 hint 必须含 Argus')
+  for (const instance of ['atlas-1', 'atlas-3']) assert.ok(hintBlock.includes(instance), '执行席 hint 必须含实例名 ' + instance)
+})
