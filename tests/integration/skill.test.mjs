@@ -154,7 +154,7 @@ test('席位文案不再出现机械执行席，讲解席在注入与 Skill 中�
 test('讲解协议逐字在注入与 Skill，三档、判据与边界齐全', () => {
   assert.ok(COORDINATOR_INSTRUCTION.includes(EXPLAINER_PROTOCOL))
   assert.ok(skill.content.includes(EXPLAINER_PROTOCOL))
-  for (const token of ['D1', 'D2', 'D3', '机制', '证据（文件:行号）', '一句话本质', '可复述', '可定位', '可预测', '不研判', '不审计', '不产出交付物', '不改文件', '不接调研']) {
+  for (const token of ['D1', 'D2', 'D3', '机制', '证据（文件:行号）', '区间（文件:起止行', '范围最小化', '只读该区间', '校准不是接管', '一句话本质', '可复述', '可定位', '可预测', '不研判', '不审计', '不产出交付物', '不改文件', '不接调研']) {
     assert.ok(EXPLAINER_PROTOCOL.includes(token), '协议缺要素：' + token)
   }
   // 注入顺序：审计检查之后、技能指针之前。第三步拆四变体时，本断言改为逐组合检查。
@@ -379,4 +379,44 @@ test('task-45 浏览器半 hint 与 constants 的 SEAT_EN_NAMES 一致', () => {
   assert.ok(hintBlock.includes(CONST_SEAT_EN.mechanical), '讲解席 hint 必须含 Mentor')
   assert.ok(hintBlock.includes(CONST_SEAT_EN.auditor), '审计席 hint 必须含 Argus')
   for (const instance of ['atlas-1', 'atlas-3']) assert.ok(hintBlock.includes(instance), '执行席 hint 必须含实例名 ' + instance)
+})
+
+// task-51：讲解席章节逐条覆盖（对照设计第十五/十七/十八节）。
+test('讲解席章节：定位、掌控、三档、四段回答、判据、六不做、三席关系、Mentor、单一请求', () => {
+  const body = skill.content
+  // 1 一句话定位
+  assert.ok(body.includes('讲给主对话听'), '缺少「讲给主对话听」')
+  assert.ok(body.includes('知道自己哪里没懂'), '缺少「让主对话知道自己哪里没懂」')
+  assert.ok(body.includes('该追问什么'), '缺少「该追问什么」')
+  // 2 由 leader 掌控 / 不进任务板 / 不产出
+  assert.ok(body.includes('由你直接掌控'), '缺少「由你直接掌控」')
+  assert.ok(body.includes('不进任务板'), '缺少「不进任务板」')
+  assert.ok(body.includes('不产出交付物'), '缺少「不产出交付物」')
+  // 3 三档粒度
+  for (const tier of ['D1 一句话机制', 'D2 关键接口', 'D3 逐段实现']) assert.ok(body.includes(tier), '缺少档位 ' + tier)
+  // 4 四段回答格式与区间约定
+  for (const seg of ['机制：怎么运作', '证据：文件:行号', '区间：文件:起-止行', '本质：一句话说穿']) {
+    assert.ok(body.includes(seg), '回答格式缺少：' + seg)
+  }
+  assert.ok(body.includes('多个区间用「；」分隔'), '缺少区间分隔约定')
+  assert.ok(body.includes('不复制代码正文'), '缺少「不复制代码正文」')
+  for (const budget of ['区间数量', '单段上限', '合计上限']) assert.ok(body.includes(budget), '缺少区间预算列 ' + budget)
+  // 5 讲透三判据
+  for (const judge of ['可复述', '可定位', '可预测']) assert.ok(body.includes(judge), '缺少判据 ' + judge)
+  // 6 边界六不做
+  for (const never of ['不研判', '不审计', '不改文件', '不接调研', '不替你拍板']) assert.ok(body.includes(never), '缺少边界 ' + never)
+  // 7 与另两席的关系一句话
+  assert.ok(body.includes('执行席把事做成'), '缺少执行席关系句')
+  assert.ok(body.includes('审计席找出会出错的地方'), '缺少审计席关系句')
+  assert.ok(body.includes('讲解席讲清事情是怎么做的'), '缺少讲解席关系句')
+  // 8 Mentor 实例名
+  assert.ok(body.includes('Mentor'), '缺少英文名 Mentor')
+  assert.ok(body.includes('mentor'), '缺少实例名 mentor')
+  // 9 同一时间一个请求 + 笔记不落盘
+  assert.ok(body.includes('同一时间只处理一个讲解请求'), '缺少单一请求约束')
+  assert.ok(body.includes('讲解笔记不落盘'), '缺少笔记不落盘')
+  // 读取协议
+  assert.ok(body.includes('校准轮次上限两轮'), '缺少读取协议的校准轮次上限')
+  // 与注入逐字一致（漂移守卫的补充断言）
+  assert.ok(body.includes(EXPLAINER_PROTOCOL), 'SKILL 必须逐字包含 EXPLAINER_PROTOCOL')
 })
