@@ -18,25 +18,40 @@
 
 ## 安装
 
-未包含在本仓库的自动流程里。手工安装到某个 profile 时按下面的形状放文件，并在该 profile 的插件清单里加入一行（id 是 entry id，也是设置页命名空间；name 才是包名，两者可以不同）：
+使用 DeepSeek Harness 官方推荐的插件安装方式，无需手工修改 `node_modules` 或 profile 清单。
 
-    <profile>/node_modules/dsh-enhanced-team-mode/   ← 本目录内容
-    cordis.patch.yml 里已声明插入行：
-        - insert:
-            - id: team-mode
-              name: 'dsh-enhanced-team-mode'
+### 方式一：通过 DSH 图形界面安装（推荐）
 
-包的清单已经声明了浏览器半与包内技能：
+1. 打开 DSH，进入 **设置 → 插件 → 添加插件 → 安装第三方插件**。
+2. 在「包名或地址」中填入以下任一来源：
+   - **GitHub 仓库地址**：`https://github.com/xincy22/dsh-enhanced-team-mode.git`
+   - **本地目录绝对路径**（开发调试）：`/path/to/dsh-enhanced-team-mode`
+   - **npm 包名**（若已发布至 npm）：`dsh-enhanced-team-mode`
+3. 点击 **安装**，完成后点击 **立即启用**（若当前 profile 未开启 HMR，按提示重启 DSH 即可生效）。
 
-    "exports": { ".": "./index.js", "./client": "./lib/client.js" }
-    "dsh": { "bundle": { "patch": "./cordis.patch.yml" }, "client": { "platform": "web" } }
-    "files": [ "index.js", "src", "lib/client.js", "skills", "cordis.patch.yml", "package.json", "README.md" ]
+### 方式二：通过 DSH CLI 安装
 
-本次交付没有安装到任何 profile，也没有改全局配置。
+```bash
+# 从 GitHub 仓库安装
+dsh plugin add https://github.com/xincy22/dsh-enhanced-team-mode.git
+
+# 或从本地目录安装（使用 file: 前缀复制进 profile，避免软链跨依赖树解析）
+dsh plugin add file:/absolute/path/to/dsh-enhanced-team-mode
+
+# 指定目标 profile
+dsh plugin --profile <profile> add https://github.com/xincy22/dsh-enhanced-team-mode.git
+```
+
+安装完成后，插件会在 **设置 → 团队模式** 中自动挂载配置分区，并同时支持在 **设置 → 插件 → 已安装** 中查看详情、启停或卸载。
+
+### 升级与卸载
+
+- **图形界面**：在 **设置 → 插件 → 已安装** 中找到「团队模式增强」，直接停用或卸载；升级请先卸载后重新安装。
+- **CLI**：`dsh plugin remove dsh-enhanced-team-mode`（或带上 `--profile <profile>`）。
 
 ## 设置
 
-入口：插件页 → 本插件 → 配置区（槽位 plugins.bundle.config，按包名 key）。
+入口：**设置 → 团队模式**（槽位 `settings.section`，id 为 `team-mode`），亦保留 **设置 → 插件 → 本插件** 详情页配置区（槽位 `plugins.bundle.config`）。
 
 | 字段 | 含义 |
 | --- | --- |

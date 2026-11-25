@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 /** 极简 React 替身：只提供 createElement 与 hooks 的空实现，用于验证注册与数据，不验证渲染。 */
 function reactStub() {
@@ -34,7 +35,7 @@ function loadBundle(file) {
   return registered
 }
 
-const file = new URL('../../lib/client.js', import.meta.url).pathname.replace(/^\//, '')
+const file = fileURLToPath(new URL('../../lib/client.js', import.meta.url))
 const registered = loadBundle(file)
 
 /** 用替身把函数组件真正展开成元素树：这是唯一能发现「组件自递归」的检查方式，
@@ -175,8 +176,8 @@ test('apply 把设置区注册进 plugins.bundle.config，key 沿用 entry id', 
     remote: { session: { modelCatalog: () => Promise.resolve({ ok: true, value: { groups: [], failures: [] } }) } },
   }
   mod.apply(ctx)
-  assert.deepEqual(injections, ['settings.section', 'plugins.bundle.config'])
-  assert.equal(registrations.length, 2)
+  assert.deepEqual(injections, ['settings.section', 'settings.section.icon', 'plugins.bundle.config'])
+  assert.equal(registrations.length, 3)
   const bundleCard = registrations.find((r) => r.options.name === 'plugins.bundle.config')
   assert.equal(bundleCard.options.key, 'dsh-enhanced-team-mode')
   assert.equal(typeof bundleCard.component, 'function')
@@ -208,7 +209,7 @@ test('设置卡组件接收 props 并按 view===page 渲染，注入回调带防
     remote: { session: { modelCatalog: () => Promise.resolve({ ok: true, value: { groups: [], failures: [] } }) } },
   }
   mod.apply(ctx)
-  assert.equal(registrations.length, 2)
+  assert.equal(registrations.length, 3)
   // 组件层行为：摘要视图返回 null，详情页返回元素（取 bundle 卡那个）
   const component = registrations.find((r) => r.options.name === 'plugins.bundle.config').component
   assert.equal(component({ view: 'summary' }), null)
@@ -255,7 +256,7 @@ test('settings.section 独立设置页：id=entry id、order=80、label=团队�
   assert.notEqual(element, null)
   const dump = JSON.stringify(element)
   assert.ok(dump.includes('团队模式'), '设置页必须有标题')
-  assert.ok(dump.includes('每档'), '设置页必须说明每档的作用')
+  assert.ok(dump.includes('新建成员'), '设置页必须说明作用范围')
 
   // 无服务：settings.section 仍注册，组件渲染可见错误文本而不是静默返回
   env = makeCtx(false)
@@ -386,7 +387,7 @@ test('buildAuditMode：缺省两个都开，都关时审计行置灰', () => {
   const rows = mod.__test.buildRows({ values: { auditMode: { background: false, finalReview: false } } })
   const auditor = rows.find((row) => row.role === 'auditor')
   assert.equal(auditor.disabled, true)
-  assert.match(auditor.hint, /暂不生效/)
+  assert.match(auditor.hint, /不生效/)
   assert.equal(rows.find((row) => row.role === 'executor').disabled, false)
 })
 
@@ -414,9 +415,9 @@ test('设置页审计开关：都关时审计档置灰，勾选后台后保存�
   assert.ok(JSON.stringify(tree).includes('不设审计席'), '状态行应显示不设审计席')
   const trigger = live.find(tree, (node) => node.type === 'button' && node.props.id === 'tm-auditor-model')
   assert.equal(trigger.props.disabled, true, '都关时审计档应置灰')
-  const box = live.find(tree, (node) => node.type === 'input' && node.props.type === 'checkbox')
+  const box = live.find(tree, (node) => node.type === 'button' && node.props.role === 'switch' && node.props['data-audit-key'] === 'background')
   assert.ok(box, '必须有后台持续审计开关')
-  box.props.onChange()
+  box.props.onClick()
   tree = live.paint(section.component({ close: () => {} }))
   const saveButton = live.find(tree, (node) => node.type === 'button' && String(node.props.className).includes('is-primary'))
   saveButton.props.onClick()
