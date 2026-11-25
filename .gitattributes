@@ -1,0 +1,5 @@
+# 全仓库统一 LF：Windows 上 core.autocrlf=true 也不会把文件检成 CRLF。
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary

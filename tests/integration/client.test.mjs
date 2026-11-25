@@ -3,6 +3,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
+// 读取插件源码统一按 LF 比较：仓库统一 LF（.gitattributes），但 Windows 上 core.autocrlf=true
+// 可能把工作区检成 CRLF，断言不应依赖检出的行尾。
+const readClientSource = () => readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+
 /** 极简 React 替身：只提供 createElement 与 hooks 的空实现，用于验证注册与数据，不验证渲染。 */
 function reactStub() {
   const React = {
@@ -191,7 +195,7 @@ test('apply 把设置区注册进 plugins.bundle.config，key 沿用 entry id', 
 // 真机回归：宿主 renderSlot 把 ownerProps（含 view:'page'）传给组件，摘要视图返回 null；
 // slots.inject 回调在槽位未声明时延迟执行且异常无人接，必须兜底。
 test('设置卡组件接收 props 并按 view===page 渲染，注入回调带防御', () => {
-  const clientSource = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8')
+  const clientSource = readClientSource()
   assert.ok(/function Card\(props\)/.test(clientSource), 'Card 必须接收 props')
   assert.ok(clientSource.includes("props.view !== 'page'"), '摘要视图必须返回 null，只渲染详情页')
   const injectBlock = /ctx\.slots\.inject\('plugins\.bundle\.config', \(\) => \{/
@@ -222,7 +226,7 @@ test('设置卡组件接收 props 并按 view===page 渲染，注入回调带防
 // 真机回归：详情页卡在此宿主版本可能不渲染，settings.section 是可靠入口（office/sidenote 同款）。
 // 静态断言注册参数，行为断言 Section/降级组件渲染。
 test('settings.section 独立设置页：id=entry id、order=80、label=团队模式，缺服务时渲染可见错误', () => {
-  const clientSource = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8')
+  const clientSource = readClientSource()
   assert.ok(clientSource.includes("name: 'settings.section'"), '必须注册 settings.section')
   assert.ok(clientSource.includes("id: 'team-mode'"), 'section id 必须是 entry id')
   assert.ok(/order: 80/.test(clientSource), 'order 80 排在第三方分区常规位次')
@@ -276,7 +280,7 @@ test('settings.section 独立设置页：id=entry id、order=80、label=团队�
 // 1) 静态：任何 `function X(...) { return X(...) }` 形态直接判失败；
 // 2) 行为：用替身真展开组件树，同一组件不得出现在自己的祖先链上，并确认三行表单真的产出。
 test('回归：设置页组件树可完整展开、无组件自递归，且渲染出三行模型表单', () => {
-  const clientSource = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8')
+  const clientSource = readClientSource()
   const selfRecursive = [...clientSource.matchAll(/function\s+(\w+)\s*\(([^)]*)\)\s*\{\s*return\s+\1\(/g)]
     .map((match) => match[1])
   assert.deepEqual(selfRecursive, [], 'client.js 不得存在组件自调用（渲染期会递归爆栈导致整页空白）')
@@ -564,7 +568,7 @@ test('UI：模型有推理档位才渲染等级选择器，换模型后消失', 
 })
 
 test('面板布局：两行选择器各自弹出层，行高与配色对齐宿主', () => {
-  const clientSource = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8')
+  const clientSource = readClientSource()
   assert.match(clientSource, /\.tm-menu\{[^}]*overflow:auto/, '选项层自己滚动，不撑破视口')
   assert.match(clientSource, /\.tm-field\{[^}]*height:34px/, '选择行行高 34，对齐宿主')
   assert.match(clientSource, /\.tm-field-label\{[^}]*label-secondary/, '标签走次要色')
@@ -575,7 +579,7 @@ test('面板布局：两行选择器各自弹出层，行高与配色对齐宿�
 
 // 修复守卫（task-42）：面板不能被自己的滚动监听关掉，且点开后必须保持展开。
 test('滚动关闭排除组合控件内部，点开后保持展开', () => {
-  const clientSource = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8')
+  const clientSource = readClientSource()
   // 1) 静态：scroll 处理器必须排除 [data-dsh-tm-combo] 内部的滚动，不能无条件 setOpen(false)。
   const scrollHandler = /const onScroll = \(event\) => \{([\s\S]*?)\n          \}/.exec(clientSource)
   assert.ok(scrollHandler, '必须存在 onScroll 处理器')
@@ -610,7 +614,7 @@ test('滚动关闭排除组合控件内部，点开后保持展开', () => {
 })
 
 test('inject 声明覆盖 client.js 访问的全部 ctx 服务（至少 configForms）', () => {
-  const clientSource = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8')
+  const clientSource = readClientSource()
   const declaredBlock = /exports\.inject\s*=\s*\[([^\]]*)\]/.exec(clientSource)
   assert.ok(declaredBlock, 'client.js 必须导出 inject 数组')
   const declared = [...declaredBlock[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1])
@@ -631,7 +635,7 @@ test('inject 声明覆盖 client.js 访问的全部 ctx 服务（至少 configFo
 test('接线：模块 id 与槽位 key 取包名，configForms 命名空间取 patch entry id', () => {
   const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
   const patch = readFileSync(new URL('../../cordis.patch.yml', import.meta.url), 'utf8')
-  const clientSource = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8')
+  const clientSource = readClientSource()
   const entryId = /id:\s*([^\s]+?)(?:\s|$)/.exec(patch.split('- insert:')[1])?.[1]
   assert.equal(pkg.name, 'dsh-enhanced-team-mode')
   assert.equal(entryId, 'team-mode')
@@ -689,7 +693,7 @@ test('生效范围与授权提示文案存在', () => {
 
 // task-47 复审：颜色必须走宿主变量，箭头优先宿主图标、可退回字符。
 test('颜色与箭头：宿主变量优先，无裸硬编码颜色，图标可回退', async () => {
-  const clientSource = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8')
+  const clientSource = readClientSource()
   assert.match(clientSource, /\.tm-menu\{[^}]*box-shadow:var\(--dsw-elevation-panel/, '弹出层阴影必须用 --dsw-elevation-panel')
   assert.match(clientSource, /\.tm-btn\.is-primary\{[^}]*color:var\(--dsw-alias-label-on-color/, '主按钮文字色必须用 --dsw-alias-label-on-color')
   // 裸硬编码：var(--x, 回退值) 里的回退值允许，其余不允许出现 #hex 或 rgba( 作为独立颜色值。

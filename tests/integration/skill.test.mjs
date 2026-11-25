@@ -11,7 +11,7 @@ import {
 const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
 const readmeSrc = readFileSync(new URL('../../README.md', import.meta.url), 'utf8')
 const planSrc = readFileSync(new URL('../../PLAN.md', import.meta.url), 'utf8')
-const clientSrc = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8')
+const clientSrc = readFileSync(new URL('../../lib/client.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const instructionSrc = readFileSync(new URL('../../src/inject/instruction.js', import.meta.url), 'utf8')
 const skill = loadSkill()
 
