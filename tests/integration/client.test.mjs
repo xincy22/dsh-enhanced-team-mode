@@ -294,7 +294,7 @@ test('回归：设置页组件树可完整展开、无组件自递归，且渲�
   const tree = expandTree(section.component({ close: () => {} }))
   const dump = JSON.stringify(tree)
   assert.ok(dump.includes('团队模式'), '设置页标题必须渲染出来')
-  for (const title of ['审计模型', '能力型执行模型', '讲解模型']) {
+  for (const title of ['审计模型', '能力型执行模型', '侦察与讲解模型']) {
     assert.ok(dump.includes(title), '缺少表单行：' + title)
   }
   const selects = (tree) => (JSON.stringify(tree).match(/"className":"tm-field(?: is-disabled)?"/g) || []).length

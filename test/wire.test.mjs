@@ -83,7 +83,7 @@ test('首次触发：根会话第一轮注入一条协作指令', async () => {
   assert.equal(injected.role, 'user')
   assert.equal(injected.source.kind, KIND)
   assert.equal(injected.source.form, 'instructions')
-  assert.match(injected.content[0].text, /项目协调者/)
+  assert.match(injected.content[0].text, /架构协调者/)
   assert.equal(h.stateOf(s).taskEpoch, 1)
   assert.equal(h.stateOf(s).lastInjectedTurn, 1)
 })

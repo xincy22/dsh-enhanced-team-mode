@@ -82,10 +82,11 @@ export async function resolveForAgent({ ctx, config, agent, signal, policyReady 
       code: error instanceof SettingsError ? error.code : 'SETTINGS_CATALOG_UNAVAILABLE',
       message: '无法读取授权模型目录：' + (error instanceof Error ? error.message : String(error)),
     })
-    return { routes: { auditor: undefined, executor: undefined, mechanical: undefined }, problems }
+    const auditOff = read.store.auditMode?.background === false && read.store.auditMode?.finalReview === false
+    return { routes: { auditor: undefined, executor: undefined, mechanical: undefined }, problems, auditOff }
   }
   const resolved = resolveRoutes({ store: read.store, catalog, parentRoute })
-  return { routes: resolved.routes, problems: [...problems, ...resolved.problems] }
+  return { routes: resolved.routes, problems: [...problems, ...resolved.problems], auditOff: resolved.auditOff }
 }
 
 /**

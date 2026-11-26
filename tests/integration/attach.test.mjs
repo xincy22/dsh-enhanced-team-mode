@@ -16,10 +16,10 @@ async function firstTask(h, session, text = '把插件骨架搭起来') {
 }
 
 const MODES = [
-  { flags: { background: true, finalReview: true }, duty: '全程并行审计', checks: true, seats: '最多 5 名' },
-  { flags: { background: true, finalReview: false }, duty: '后台持续巡检', checks: true, seats: '最多 5 名' },
-  { flags: { background: false, finalReview: true }, duty: '交付终审', checks: true, seats: '最多 5 名' },
-  { flags: { background: false, finalReview: false }, duty: '本会话不设审计席', checks: false, seats: '最多 4 名' },
+  { flags: { background: true, finalReview: true }, duty: '节点巡检与交付终审', checks: true, seats: '上限 5 名' },
+  { flags: { background: true, finalReview: false }, duty: '节点持续巡检', checks: true, seats: '上限 5 名' },
+  { flags: { background: false, finalReview: true }, duty: '独立交付终审', checks: true, seats: '上限 5 名' },
+  { flags: { background: false, finalReview: false }, duty: '无独立审计席', checks: false, seats: '上限 4 名' },
 ]
 
 test('四个审计组合：注入文本按开关取职责变体与检查段', async () => {
@@ -30,13 +30,13 @@ test('四个审计组合：注入文本按开关取职责变体与检查段', as
     const text = await firstTask(h, session)
     assert.ok(text.includes(mode.duty), '组合缺职责变体：' + JSON.stringify(mode.flags))
     assert.ok(text.includes(mode.seats), '组合席位数不对：' + JSON.stringify(mode.flags))
-    assert.ok(text.includes('讲解席'), '组合缺讲解协议：' + JSON.stringify(mode.flags))
+    assert.ok(text.includes('侦察与主动证伪'), '组合缺侦察协议：' + JSON.stringify(mode.flags))
     if (mode.checks) {
-      assert.ok(text.includes('三项固定检查'), '组合缺检查抬头：' + JSON.stringify(mode.flags))
-      assert.ok(text.includes('宿主能力对照'), '组合缺检查项：' + JSON.stringify(mode.flags))
+      assert.ok(text.includes('三项核查清单'), '组合缺检查抬头：' + JSON.stringify(mode.flags))
+      assert.ok(text.includes('复用与一致性'), '组合缺检查项：' + JSON.stringify(mode.flags))
     } else {
-      assert.equal(text.includes('三项固定检查'), false, '都关不应注入检查抬头')
-      assert.equal(text.includes('宿主能力对照'), false, '都关不应注入检查项')
+      assert.equal(text.includes('三项核查清单'), false, '都关不应注入检查抬头')
+      assert.equal(text.includes('复用与一致性'), false, '都关不应注入检查项')
     }
   }
 })
@@ -86,7 +86,7 @@ test('复用已有成员保留原模型写进指令', async () => {
   const session = h.session('s1')
   h.authorizedEvent(session)
   const text = await firstTask(h, session)
-  assert.ok(text.includes('复用已有成员时不要传 provider 与 model'), text)
+  assert.ok(text.includes('复用已有成员时不要传 provider、model、reasoning_effort'), text)
 })
 
 test('主对话模型不变：不选模型、不改请求配置', async () => {
@@ -133,7 +133,7 @@ test('两角色都跟随默认时不出现模型路由块', async () => {
   h.authorizedEvent(session)
   const text = await firstTask(h, session)
   assert.equal(text.includes('## 成员模型'), false)
-  assert.ok(text.includes('项目协调者'))
+  assert.ok(text.includes('架构协调者'))
 })
 
 test('坏配置只报问题，不静默改用默认路由', async () => {

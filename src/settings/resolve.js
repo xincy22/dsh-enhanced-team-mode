@@ -74,9 +74,19 @@ export function resolveRole({ role, store, catalog, parentRoute }) {
     : { provider: selection.provider, model: selection.model }
   assertRouteUsable(route, catalog, parentRoute)
   const decision = { kind: 'route', provider: route.provider, model: route.model }
-  // 推理等级原样透传：它是模型级可选属性，空串表示跟随模型默认，此处不做任何替换。
+  // 推理等级：空串表示跟随模型默认；当目录明确声明了模型的 efforts 列表时，提前校验合法性。
   const effort = typeof selection.reasoningEffort === 'string' ? selection.reasoningEffort.trim() : ''
-  if (effort.length > 0) decision.reasoningEffort = effort
+  if (effort.length > 0) {
+    const modelEntry = (catalog.models[route.provider] ?? []).find((entry) => entry.id === route.model)
+    if (Array.isArray(modelEntry?.efforts) && !modelEntry.efforts.includes(effort)) {
+      throw new SettingsError(
+        'SETTINGS_INVALID_REASONING_EFFORT',
+        '路由 "' + route.provider + '/' + route.model + '" 不支持思考强度 "' + effort + '"（可选：'
+          + (modelEntry.efforts.length > 0 ? modelEntry.efforts.join(', ') : '无') + '）',
+      )
+    }
+    decision.reasoningEffort = effort
+  }
   return decision
 }
 

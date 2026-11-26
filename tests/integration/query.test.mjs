@@ -61,7 +61,7 @@ test('复用旧成员不变：查询文本与工具说明都写明复用不需�
   const mounted = mount(h, { auditor: { provider: PRO.provider, model: PRO.model } })
   h.authorizedEvent(session)
   const resolved = await mounted.query(h.makeAgent(session))
-  assert.ok(resolved.text.includes('复用已有成员时不要传 provider 与 model'), resolved.text)
+  assert.ok(resolved.text.includes('复用已有成员时不要传 provider、model、reasoning_effort'), resolved.text)
   assert.ok(ROUTE_TOOL_DESCRIPTION.includes('Reusing an existing teammate needs no route'))
 })
 
@@ -138,7 +138,7 @@ test('注入里带按需查询入口的指针', async () => {
   const { COORDINATOR_INSTRUCTION, ROUTE_QUERY_POINTER } = await import('../../src/inject/instruction.js')
   assert.ok(COORDINATOR_INSTRUCTION.includes(ROUTE_QUERY_POINTER))
   assert.ok(ROUTE_QUERY_POINTER.includes(ROUTE_TOOL_NAME))
-  assert.ok(ROUTE_QUERY_POINTER.includes('新建成员之前'))
+  assert.ok(ROUTE_QUERY_POINTER.includes('新建成员前'))
 })
 
 test('文档口径守卫：漏传参数是继承父路由，不是派发失败', async () => {

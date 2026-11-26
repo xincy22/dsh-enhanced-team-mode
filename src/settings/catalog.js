@@ -27,11 +27,20 @@ export function createCatalog({ providers = [], models = {}, authorized = null, 
   for (const [provider, list] of Object.entries(models ?? {})) {
     modelsByProvider[provider] = (Array.isArray(list) ? list : [])
       .filter((model) => model && typeof model.id === 'string' && model.id.length > 0)
-      .map((model) => ({
-        id: model.id,
-        name: typeof model.name === 'string' && model.name.length > 0 ? model.name : model.id,
-        ...(Array.isArray(model.aliases) ? { aliases: model.aliases.filter((alias) => typeof alias === 'string') } : {}),
-      }))
+      .map((model) => {
+        const rawEfforts = model.reasoning && Array.isArray(model.reasoning.efforts)
+          ? model.reasoning.efforts
+          : (Array.isArray(model.efforts) ? model.efforts : null)
+        const efforts = rawEfforts
+          ? rawEfforts.map((e) => (typeof e === 'string' ? e : e?.id)).filter((id) => typeof id === 'string' && id.length > 0)
+          : undefined
+        return {
+          id: model.id,
+          name: typeof model.name === 'string' && model.name.length > 0 ? model.name : model.id,
+          ...(Array.isArray(model.aliases) ? { aliases: model.aliases.filter((alias) => typeof alias === 'string') } : {}),
+          ...(efforts !== undefined ? { efforts } : {}),
+        }
+      })
   }
   const allowlist = Array.isArray(authorized)
     ? authorized

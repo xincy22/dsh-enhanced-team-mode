@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Enhanced Team Mode",
-    "description": "Injects team coordination instructions and collaboration skill in agent-team sessions, with per-role model and reasoning effort settings."
+    "description": "Injects lightweight team coordination principles (context firewall + active falsification) and collaboration skill, with per-role model and reasoning effort settings."
   }
 }

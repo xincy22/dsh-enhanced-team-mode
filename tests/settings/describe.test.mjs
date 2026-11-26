@@ -35,17 +35,17 @@ test('每个角色给出一行：当前值、候选、是否可用', () => {
   assert.match(auditor.currentLabel, /默认/)
   const mechanical = rows.find((row) => row.role === 'mechanical')
   assert.equal(mechanical.mode, 'default')
-  assert.equal(mechanical.title, '讲解模型')
+  assert.equal(mechanical.title, '侦察与讲解模型')
 })
 
 test('审计开关：组合状态行与审计档置灰', () => {
   const both = describeAuditMode({ store: { auditMode: { background: true, finalReview: true } } })
   assert.equal(both.mode, 'both')
   assert.equal(both.auditorDisabled, false)
-  assert.match(both.status, /后台巡检与交付终审/)
+  assert.match(both.status, /审计席 1 名/)
   const background = describeAuditMode({ store: { auditMode: { background: true, finalReview: false } } })
   assert.equal(background.mode, 'background')
-  assert.match(background.status, /仅后台巡检/)
+  assert.match(background.status, /仅节点巡检/)
   const finalReview = describeAuditMode({ store: { auditMode: { background: false, finalReview: true } } })
   assert.equal(finalReview.mode, 'finalReview')
   assert.match(finalReview.status, /仅交付终审/)
@@ -53,7 +53,7 @@ test('审计开关：组合状态行与审计档置灰', () => {
   assert.equal(none.mode, 'none')
   assert.equal(none.auditorDisabled, true)
   assert.match(none.status, /不设审计席/)
-  assert.match(none.auditorHint, /暂不生效/)
+  assert.match(none.auditorHint, /不生效/)
   // 缺省按两个都开
   assert.equal(describeAuditMode({ store: {} }).mode, 'both')
 })
@@ -62,7 +62,7 @@ test('都关时审计行带 disabled，其余行不受影响', () => {
   const rows = describeRoles({ store: { auditMode: { background: false, finalReview: false } }, catalog, parentRoute })
   const auditor = rows.find((row) => row.role === 'auditor')
   assert.equal(auditor.disabled, true)
-  assert.match(auditor.hint, /暂不生效/)
+  assert.match(auditor.hint, /不生效/)
   assert.equal(rows.find((row) => row.role === 'executor').disabled, false)
 })
 
